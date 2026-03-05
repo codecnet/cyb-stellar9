@@ -247,14 +247,15 @@ export function generateHtmlReport(clientName, organisationName, statistics, rep
         padding: 0;
       }
       
+      /* Remove any automatic page breaks that might be causing blank pages */
       .page {
-        page-break-after: always;
-        break-after: page;
+        page-break-after: always !important;
+        break-after: page !important;
       }
       
       .page:last-child {
-        page-break-after: auto;
-        break-after: auto;
+        page-break-after: auto !important;
+        break-after: auto !important;
       }
     }
 
@@ -264,33 +265,32 @@ export function generateHtmlReport(clientName, organisationName, statistics, rep
       max-width: 210mm;
       margin: 0 auto;
       background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-      padding: 5mm 0;
+      padding: 0;
       page-break-after: always;
       break-after: page;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
     }
 
+    /* Remove page break from last page */
     .page:last-child {
       page-break-after: auto;
       break-after: auto;
     }
 
     .page-content {
-      padding: 0 10mm;
+      padding: 5mm 10mm 10mm 10mm;
     }
 
     /* ── Cover Page ────────────────────────────────────────────────────── */
-    .cover-page {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 277mm; /* A4 height minus margins */
-    }
-
     .cover-page .page-content {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
       text-align: center;
-      width: 100%;
+      min-height: 237mm; /* A4 height minus margins */
+      padding: 10mm;
     }
 
     /* ── Section Headers ───────────────────────────────────────────────── */
@@ -298,8 +298,8 @@ export function generateHtmlReport(clientName, organisationName, statistics, rep
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin: 10mm 0 8mm 0;
-      padding-bottom: 5mm;
+      margin: 5mm 0 8mm 0;
+      padding-bottom: 3mm;
       border-bottom: 2px solid #3b82f6;
       page-break-after: avoid;
     }
@@ -358,7 +358,7 @@ export function generateHtmlReport(clientName, organisationName, statistics, rep
       font-size: 16px;
       font-weight: 600;
       color: #3b82f6;
-      margin-bottom: 6mm;
+      margin-bottom: 5mm;
     }
 
     /* ── Stat Cards ────────────────────────────────────────────────────── */
