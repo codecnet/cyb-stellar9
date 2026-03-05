@@ -30,8 +30,8 @@ const getFrequencyDays = (frequency) => {
 
 // Get severity level from numeric value
 const getSeverityLevel = (level) => {
-  if (level >= 12) return 'critical';
-  if (level >= 8) return 'major';
+  if (level >= 15) return 'critical';
+  if (level >= 12) return 'major';
   return 'minor';
 };
 
