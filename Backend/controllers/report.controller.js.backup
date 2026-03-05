@@ -259,127 +259,82 @@ const generateReport = asyncHandler(async (req, res) => {
     // Get Wazuh token first
     const token = await getWazuhToken(WAZUH_HOST, WAZUH_USER, WAZUH_PASS);
 
-    // Fetch alert statistics from Wazuh Indexer using aggregations (fast — single request)
-    const alertBaseQuery = {
-      bool: {
-        must: [
-          {
-            range: {
-              '@timestamp': {
-                gte: startDate.toISOString(),
-                lte: endDate.toISOString()
+    // Fetch ALL alerts from Wazuh Indexer using search_after pagination (Level 8 and above only)
+    const BATCH_SIZE = 1000;
+    const baseQuery = {
+      size: BATCH_SIZE,
+      track_total_hits: true,
+      query: {
+        bool: {
+          must: [
+            {
+              range: {
+                '@timestamp': {
+                  gte: startDate.toISOString(),
+                  lte: endDate.toISOString()
+                }
+              }
+            },
+            {
+              range: {
+                'rule.level': {
+                  gte: 8
+                }
               }
             }
-          },
-          {
-            range: {
-              'rule.level': { gte: 8 }
-            }
-          }
-        ]
-      }
+          ]
+        }
+      },
+      sort: [{ '@timestamp': { order: 'desc' } }, { '_id': { order: 'desc' } }],
+      _source: [
+        'rule.level',
+        'rule.description',
+        'rule.id',
+        'rule.groups',
+        '@timestamp',
+        'predecoder.hostname',
+        'agent.name',
+        'agent.id',
+        'full_log',
+        'location',
+        'data.srcip'
+      ]
     };
 
-    const statsQuery = {
-      size: 10,
-      track_total_hits: true,
-      query: alertBaseQuery,
-      sort: [{ '@timestamp': { order: 'desc' } }],
-      _source: ['rule.level', 'rule.description', 'rule.id', 'rule.groups', '@timestamp', 'agent.name', 'agent.id', 'data.srcip'],
-      aggs: {
-        severity_ranges: {
-          range: {
-            field: 'rule.level',
-            ranges: [
-              { key: 'minor', from: 8, to: 12 },
-              { key: 'major', from: 12, to: 15 },
-              { key: 'critical', from: 15, to: 100 }
-            ]
-          }
-        },
-        daily_trend: {
-          date_histogram: {
-            field: '@timestamp',
-            calendar_interval: 'day',
-            format: 'yyyy-MM-dd'
-          }
-        },
-        top_alerts: {
-          terms: {
-            field: 'rule.description.keyword',
-            size: 10,
-            order: { _count: 'desc' }
-          },
-          aggs: {
-            max_level: { max: { field: 'rule.level' } },
-            unique_hosts: { cardinality: { field: 'agent.name.keyword' } },
-            last_seen: { max: { field: '@timestamp' } },
-            sample_host: { terms: { field: 'agent.name.keyword', size: 1 } }
-          }
-        },
-        alert_types: {
-          terms: {
-            field: 'rule.groups',
-            size: 5,
-            order: { _count: 'desc' }
+    const allHits = [];
+    let searchAfter = null;
+    let totalAlertCount = 0;
+    let batchNum = 0;
+
+    do {
+      const batchQuery = searchAfter ? { ...baseQuery, search_after: searchAfter } : baseQuery;
+      const alertsResponse = await axiosInstance.post(
+        `${INDEXER_HOST}/wazuh-alerts*/_search`,
+        batchQuery,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            Authorization: `Basic ${authEncoded}`
           }
         }
+      );
+
+      const batchHits = alertsResponse.data.hits?.hits || [];
+      if (batchNum === 0) {
+        totalAlertCount = alertsResponse.data.hits?.total?.value || batchHits.length;
       }
-    };
+      batchNum++;
+      console.log(`  Fetching alerts batch ${batchNum} — got ${batchHits.length} hits (total: ${totalAlertCount})`);
 
-    const alertsResponse = await axiosInstance.post(
-      `${INDEXER_HOST}/wazuh-alerts*/_search`,
-      statsQuery,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          Authorization: `Basic ${authEncoded}`
-        }
-      }
-    );
+      allHits.push(...batchHits);
 
-    const totalAlertCount = alertsResponse.data.hits?.total?.value || 0;
-    const aggs = alertsResponse.data.aggregations || {};
+      if (batchHits.length < BATCH_SIZE) break;
+      const lastHit = batchHits[batchHits.length - 1];
+      searchAfter = lastHit.sort;
+    } while (true);
 
-    // Build severity counts from aggregations
-    const severityBuckets = aggs.severity_ranges?.buckets || [];
-    const severityCounts = { critical: 0, major: 0, minor: 0, total: totalAlertCount };
-    severityBuckets.forEach(b => {
-      if (b.key === 'critical') severityCounts.critical = b.doc_count;
-      else if (b.key === 'major') severityCounts.major = b.doc_count;
-      else if (b.key === 'minor') severityCounts.minor = b.doc_count;
-    });
-
-    // Build daily trend from aggregations
-    const dailyCounts = {};
-    (aggs.daily_trend?.buckets || []).forEach(b => {
-      if (b.doc_count > 0) dailyCounts[b.key_as_string] = b.doc_count;
-    });
-
-    // Build top alerts from aggregations
-    const topAlerts = (aggs.top_alerts?.buckets || []).map(b => {
-      const maxLevel = b.max_level?.value || 8;
-      return {
-        description: b.key,
-        severity: getSeverityLevel(maxLevel),
-        count: b.doc_count,
-        host: b.sample_host?.buckets?.[0]?.key || 'Unknown',
-        hosts_affected: b.unique_hosts?.value || 1,
-        last_seen: b.last_seen?.value_as_string
-          ? formatDateTime(new Date(b.last_seen.value_as_string))
-          : 'N/A'
-      };
-    });
-
-    // Build alert types from aggregations
-    const alertTypes = (aggs.alert_types?.buckets || []).map(b => ({
-      type: b.key,
-      count: b.doc_count
-    }));
-
-    // Map top raw hits as sample alerts (for any per-alert detail used in template)
-    const alerts = (alertsResponse.data.hits?.hits || []).map(hit => {
+    const alerts = allHits.map(hit => {
       const source = hit._source || {};
       return {
         alert_id: hit._id,
@@ -388,13 +343,14 @@ const generateReport = asyncHandler(async (req, res) => {
         rule_id: source.rule?.id,
         rule_groups: source.rule?.groups || [],
         timestamp: source['@timestamp'],
+        host_name: source.predecoder?.hostname,
         agent_name: source.agent?.name || 'Unknown',
         agent_id: source.agent?.id,
         srcip: source.data?.srcip
       };
     });
 
-    console.log(`✅ Fetched alert stats via aggregations — total: ${totalAlertCount}, critical: ${severityCounts.critical}, major: ${severityCounts.major}, minor: ${severityCounts.minor}`);
+    console.log(`✅ Fetched ${alerts.length} alerts (index total: ${totalAlertCount}) from Wazuh Indexer for ${organisationName}`);
     if (alerts.length > 0) {
       console.log(`   Sample alert: ${alerts[0].alert_description} (Severity: ${alerts[0].severity}, Time: ${alerts[0].timestamp})`);
     } else {
@@ -441,8 +397,74 @@ const generateReport = asyncHandler(async (req, res) => {
     const scaData = await fetchSCAData(WAZUH_HOST, token);
     console.log(`✅ SCA Data: Overall Score: ${scaData.overall_score}%, Total Checks: ${scaData.total_checks}, Agents with SCA: ${scaData.agents_sca?.length || 0}`);
 
-    // All statistics (severityCounts, topAlerts, alertTypes, dailyCounts) are already
-    // computed from OpenSearch aggregations above — no per-hit loop needed.
+    // Calculate statistics
+    const severityCounts = { critical: 0, major: 0, minor: 0, total: totalAlertCount };
+    const alertGroups = {};
+    const dailyCounts = {};
+    const agents = new Set();
+    const typeCounts = {};
+
+    alerts.forEach(alert => {
+      const level = alert.severity || 0;
+      const severity = getSeverityLevel(level);
+      severityCounts[severity]++;
+
+      // Group alerts
+      const desc = alert.alert_description || 'Unknown';
+      if (!alertGroups[desc]) {
+        alertGroups[desc] = {
+          count: 0,
+          description: desc,
+          severity: severity,
+          hosts: new Set(),
+          last_seen: null
+        };
+      }
+      alertGroups[desc].count++;
+      alertGroups[desc].hosts.add(alert.agent_name || 'Unknown');
+
+      if (alert.timestamp) {
+        const alertTime = new Date(alert.timestamp);
+        if (!alertGroups[desc].last_seen || alertTime > alertGroups[desc].last_seen) {
+          alertGroups[desc].last_seen = alertTime;
+        }
+
+        // Daily trend
+        const dateKey = alertTime.toISOString().split('T')[0];
+        dailyCounts[dateKey] = (dailyCounts[dateKey] || 0) + 1;
+      }
+
+      // Agents
+      if (alert.agent_name && alert.agent_name !== 'Unknown') {
+        agents.add(alert.agent_name);
+      }
+
+      // Alert types
+      const ruleGroups = alert.rule_groups || [];
+      if (Array.isArray(ruleGroups) && ruleGroups.length > 0) {
+        const primaryType = ruleGroups[0];
+        typeCounts[primaryType] = (typeCounts[primaryType] || 0) + 1;
+      }
+    });
+
+    // Top alerts
+    const topAlerts = Object.values(alertGroups)
+      .map(data => ({
+        description: data.description,
+        severity: data.severity,
+        count: data.count,
+        host: Array.from(data.hosts)[0] || 'Unknown',
+        hosts_affected: data.hosts.size,
+        last_seen: data.last_seen ? formatDateTime(data.last_seen) : 'N/A'
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    // Alert types
+    const alertTypes = Object.entries(typeCounts)
+      .map(([type, count]) => ({ type, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
 
     // Daily trend data
     const sortedDates = Object.keys(dailyCounts).sort();
@@ -566,7 +588,7 @@ const generateReport = asyncHandler(async (req, res) => {
       report_period_start: startDate,
       report_period_end: endDate,
       metadata: {
-        alerts_count: totalAlertCount,
+        alerts_count: alerts.length,
         severity_counts: severityCounts,
         agents_count: agentsData.total,
         sca_score: scaData.overall_score
