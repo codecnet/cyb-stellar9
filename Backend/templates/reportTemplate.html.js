@@ -1,918 +1,796 @@
 /**
  * HTML Report Template Generator for SOC Report
- * Updated with dynamic data from Wazuh
+ *
+ * Layout strategy:
+ *  - Explicit <div class="page"> blocks with page-break-after: always
+ *    give Puppeteer clean, predictable page boundaries.
+ *  - position: fixed header + footer appear on EVERY physical page
+ *    (Puppeteer repeats fixed elements across pages).
+ *  - break-inside: avoid on every card/section prevents elements from
+ *    splitting mid-element when content overflows to the next page.
+ *  - .page-content bottom-padding keeps content above the fixed footer.
  */
 
 function generateSeverityBadge(severity) {
-  const severityClasses = {
-    critical: 'severity-critical',
-    major: 'severity-major',
-    minor: 'severity-minor'
-  };
-  const badgeClass = severityClasses[severity] || 'severity-minor';
-  return `<span class="severity-badge ${badgeClass}">${severity.charAt(0).toUpperCase() + severity.slice(1)}</span>`;
+  const map = { critical: 'severity-critical', major: 'severity-major', minor: 'severity-minor' };
+  const cls = map[severity] || 'severity-minor';
+  return `<span class="severity-badge ${cls}">${severity.charAt(0).toUpperCase() + severity.slice(1)}</span>`;
 }
 
 function generateTopAlertsTable(topAlerts) {
   if (!topAlerts || topAlerts.length === 0) {
-    return '<tr><td colspan="6" style="text-align: center;">No alerts found</td></tr>';
+    return '<tr><td colspan="6" style="text-align:center;padding:20px;color:#64748b;">No alerts found</td></tr>';
   }
-
-  const rows = topAlerts.slice(0, 10).map((alert, idx) => {
-    const severityBadge = generateSeverityBadge(alert.severity);
-    return `
-                <tr>
-                    <td>${idx + 1}</td>
-                    <td>${severityBadge}</td>
-                    <td>${alert.description}</td>
-                    <td>${alert.host}</td>
-                    <td>${alert.count}</td>
-                    <td>${alert.last_seen}</td>
-                </tr>`;
-  });
-  return rows.join('\n');
-}
-
-function generateDailyTrendData(dailyTrend) {
-  const sortedDates = Object.keys(dailyTrend).sort();
-  const last7Days = sortedDates.slice(-7);
-
-  const trendItems = last7Days.map(date => {
-    const count = dailyTrend[date];
-    const dateObj = new Date(date + 'T00:00:00Z');
-    const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
-    return `${dayName}: ${count}`;
-  });
-
-  return trendItems.join(' | ');
+  return topAlerts.slice(0, 10).map((a, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td>${generateSeverityBadge(a.severity)}</td>
+      <td>${a.description}</td>
+      <td>${a.host}</td>
+      <td>${a.count}</td>
+      <td>${a.last_seen}</td>
+    </tr>`).join('');
 }
 
 function generateStatCard(label, value) {
   return `
-                <div class="stat-card">
-                    <span class="stat-label">${label}</span>
-                    <span class="stat-value">${value}</span>
-                </div>`;
+    <div class="stat-card">
+      <span class="stat-label">${label}</span>
+      <span class="stat-value">${value}</span>
+    </div>`;
 }
 
 function generateCisItem(label, percentage, passed = 0, failed = 0) {
-  const details = passed || failed ? ` (${passed} passed, ${failed} failed)` : '';
+  const details = (passed || failed) ? ` (${passed} passed, ${failed} failed)` : '';
   return `
-            <div class="cis-item">
-                <span class="stat-label">${label}${details}</span>
-                <div>
-                    <span class="stat-value" style="font-size: 18px;">${percentage}%</span>
-                    <div class="progress-bar" style="width: 150px; display: inline-block; margin-left: 15px;">
-                        <div class="progress-fill" style="width: ${percentage}%;"></div>
-                    </div>
-                </div>
-            </div>`;
+    <div class="cis-item">
+      <span class="stat-label">${label}${details}</span>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span class="stat-value" style="font-size:16px;">${percentage}%</span>
+        <div class="progress-bar" style="width:120px;">
+          <div class="progress-fill" style="width:${percentage}%;"></div>
+        </div>
+      </div>
+    </div>`;
 }
 
 function generateAgentCard(agent) {
-  const statusClass = agent.status === 'active' ? 'status-online' : 'status-offline';
-  const statusText = agent.status === 'active' ? 'Active' : agent.status === 'disconnected' ? 'Disconnected' : 'Never Connected';
-
+  const statusCls  = agent.status === 'active' ? 'status-online' : 'status-offline';
+  const statusText = agent.status === 'active' ? 'Active'
+    : agent.status === 'disconnected' ? 'Disconnected' : 'Never Connected';
   return `
-            <div class="agent-card">
-                <div class="agent-header">
-                    <span class="agent-title">${agent.name || 'Unknown'}</span>
-                    <span class="status-indicator ${statusClass}">${statusText}</span>
-                </div>
-                <div class="agent-detail">OS: ${agent.os || 'Unknown'}</div>
-                <div class="agent-detail">IP: ${agent.ip || 'N/A'}</div>
-                <div class="agent-detail">Version: ${agent.version || 'Unknown'}</div>
-                ${agent.lastKeepAlive ? `<div class="agent-detail">Last Seen: ${new Date(agent.lastKeepAlive).toLocaleString()}</div>` : ''}
-            </div>`;
+    <div class="agent-card">
+      <div class="agent-header">
+        <span class="agent-title">${agent.name || 'Unknown'}</span>
+        <span class="status-indicator ${statusCls}">${statusText}</span>
+      </div>
+      <div class="agent-detail">OS: ${agent.os || 'Unknown'}</div>
+      <div class="agent-detail">IP: ${agent.ip || 'N/A'}</div>
+      <div class="agent-detail">Version: ${agent.version || 'Unknown'}</div>
+      ${agent.lastKeepAlive ? `<div class="agent-detail">Last Seen: ${new Date(agent.lastKeepAlive).toLocaleString()}</div>` : ''}
+    </div>`;
 }
 
 export function generateHtmlReport(clientName, organisationName, statistics, reportName = '', frequency = 'weekly', template = 'executive') {
-  const reportPeriod = statistics.report_period || {};
-  const severityCounts = statistics.severity_counts || {};
-  const severityPercentages = statistics.severity_percentages || {};
-  const topAlerts = statistics.top_alerts || [];
-  const dailyTrend = statistics.daily_trend || {};
-  const alertTypes = statistics.alert_types || [];
-  const agentSummary = statistics.agent_summary || {};
-  const agentsList = statistics.agents_list || [];
-  const cisData = statistics.cis_compliance || {};
+  const reportPeriod   = statistics.report_period       || {};
+  const severityCounts = statistics.severity_counts     || {};
+  const severityPct    = statistics.severity_percentages || {};
+  const topAlerts      = statistics.top_alerts          || [];
+  const dailyTrend     = statistics.daily_trend         || {};
+  const alertTypes     = statistics.alert_types         || [];
+  const agentSummary   = statistics.agent_summary       || {};
+  const agentsList     = statistics.agents_list         || [];
+  const cisData        = statistics.cis_compliance      || {};
 
-  // Template name mapping (match dropdown values exactly)
-  const templateNames = {
-    'executive': 'Executive Summary',
-    'technical': 'Technical Details',
-    'compliance': 'Compliance Report',
-    'incident': 'Incident Response'
-  };
-  const templateDisplayName = templateNames[template] || templateNames['executive'];
-
-  const periodStr = `${reportPeriod.start_date || 'N/A'} - ${reportPeriod.end_date || 'N/A'}`;
+  const periodStr = `${reportPeriod.start_date || 'N/A'} — ${reportPeriod.end_date || 'N/A'}`;
   const now = new Date();
   const generationDate = now.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: 'numeric',
-    hour12: true
+    year: 'numeric', month: 'long', day: 'numeric',
+    hour: 'numeric', minute: 'numeric', hour12: true
   });
 
+  // ── Top alerts HTML ───────────────────────────────────────────────────────
   const topAlertsHtml = generateTopAlertsTable(topAlerts);
-  const dailyTrendText = generateDailyTrendData(dailyTrend);
 
-  const alertTypeCards = alertTypes.slice(0, 5).map(alertType =>
-    generateStatCard(alertType.type, alertType.count)
-  ).join('');
+  // ── Alert type stat cards ─────────────────────────────────────────────────
+  const alertTypeCards = alertTypes.slice(0, 5)
+    .map(at => generateStatCard(at.type, at.count)).join('');
 
-  const currentTime = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
+  // ── Agent detail cards (limit 12) ─────────────────────────────────────────
+  const agentsCardsHtml = agentsList.slice(0, 12)
+    .map(a => generateAgentCard(a)).join('');
 
-  // Generate agent cards (limit to 8 for the grid)
-  const agentsCardsHtml = agentsList.slice(0, 8).map(agent => generateAgentCard(agent)).join('');
-
-  // CIS Compliance items
+  // ── CIS policy rows ───────────────────────────────────────────────────────
   let cisItemsHtml = '';
   if (cisData.policies && cisData.policies.length > 0) {
-    cisItemsHtml = cisData.policies.map(policy =>
-      generateCisItem(
-        policy.name,
-        policy.score,
-        policy.passed || 0,
-        policy.failed || 0
-      )
-    ).join('');
+    cisItemsHtml = cisData.policies
+      .map(p => generateCisItem(p.name, p.score, p.passed || 0, p.failed || 0))
+      .join('');
   } else {
-    cisItemsHtml = '<div class="stat-card"><span class="stat-label">No CIS compliance data available</span></div>';
+    cisItemsHtml = generateStatCard('No CIS compliance data available', '—');
   }
 
-  // Per-Agent CIS Scores
+  // ── Per-agent CIS scores ──────────────────────────────────────────────────
   let agentsCisHtml = '';
   if (cisData.agents_sca && cisData.agents_sca.length > 0) {
-    agentsCisHtml = cisData.agents_sca.map((agentSca, index) => {
-      const scoreColor = agentSca.score >= 80 ? '#22c55e' : agentSca.score >= 60 ? '#f97316' : '#ef4444';
+    agentsCisHtml = cisData.agents_sca.map((a, i) => {
+      const col = a.score >= 80 ? '#22c55e' : a.score >= 60 ? '#f97316' : '#ef4444';
       return `
         <div class="stat-card">
-          <div style="flex: 1;">
-            <span class="stat-label">${index + 1}. ${agentSca.agent_name}</span>
-            <div style="font-size: 11px; color: #64748b; margin-top: 4px;">
-              ${agentSca.total_passed} passed, ${agentSca.total_failed} failed (${agentSca.policies_count} policies)
+          <div style="flex:1;">
+            <span class="stat-label">${i + 1}. ${a.agent_name}</span>
+            <div style="font-size:11px;color:#64748b;margin-top:4px;">
+              ${a.total_passed} passed, ${a.total_failed} failed (${a.policies_count} policies)
             </div>
           </div>
-          <div style="text-align: right;">
-            <div class="stat-value" style="font-size: 24px; color: ${scoreColor};">${agentSca.score}%</div>
-            <div class="progress-bar" style="width: 100px; margin-top: 8px;">
-              <div class="progress-fill" style="width: ${agentSca.score}%; background: ${scoreColor};"></div>
+          <div style="text-align:right;">
+            <div class="stat-value" style="font-size:22px;color:${col};">${a.score}%</div>
+            <div class="progress-bar" style="width:90px;margin-top:6px;">
+              <div class="progress-fill" style="width:${a.score}%;background:${col};"></div>
             </div>
           </div>
-        </div>
-      `;
+        </div>`;
     }).join('');
   } else {
-    agentsCisHtml = '<div class="stat-card"><span class="stat-label">No per-agent CIS data available</span></div>';
+    agentsCisHtml = generateStatCard('No per-agent CIS data available', '—');
   }
 
-  // Generate simple text-based charts
-  const generateTextBarChart = (data, maxValue) => {
-    const barLength = 30;
-    const filledLength = Math.round((data / maxValue) * barLength);
-    const bar = '█'.repeat(filledLength) + '░'.repeat(barLength - filledLength);
-    return bar;
+  // ── Text bar-chart helpers ────────────────────────────────────────────────
+  const textBar = (val, max) => {
+    if (!max) return '░'.repeat(30);
+    const fill = Math.round((val / max) * 30);
+    return '█'.repeat(fill) + '░'.repeat(30 - fill);
   };
 
-  // Severity bar chart
-  const maxSeverity = Math.max(severityCounts.critical || 0, severityCounts.major || 0, severityCounts.minor || 0);
+  const maxSev = Math.max(severityCounts.critical || 0, severityCounts.major || 0, severityCounts.minor || 0, 1);
   const severityChartHtml = `
-    <div style="font-family: monospace; font-size: 12px; line-height: 2;">
-      <div style="display: flex; align-items: center; margin-bottom: 8px;">
-        <span style="width: 80px; color: #ef4444;">Critical:</span>
-        <span style="color: #ef4444;">${generateTextBarChart(severityCounts.critical || 0, maxSeverity)}</span>
-        <span style="margin-left: 10px; color: #e4e7eb;">${severityCounts.critical || 0}</span>
+    <div style="font-family:monospace;font-size:12px;line-height:2;">
+      <div style="display:flex;align-items:center;margin-bottom:6px;">
+        <span style="width:80px;color:#ef4444;">Critical:</span>
+        <span style="color:#ef4444;">${textBar(severityCounts.critical || 0, maxSev)}</span>
+        <span style="margin-left:10px;color:#e4e7eb;">${severityCounts.critical || 0}</span>
       </div>
-      <div style="display: flex; align-items: center; margin-bottom: 8px;">
-        <span style="width: 80px; color: #f97316;">Major:</span>
-        <span style="color: #f97316;">${generateTextBarChart(severityCounts.major || 0, maxSeverity)}</span>
-        <span style="margin-left: 10px; color: #e4e7eb;">${severityCounts.major || 0}</span>
+      <div style="display:flex;align-items:center;margin-bottom:6px;">
+        <span style="width:80px;color:#f97316;">Major:</span>
+        <span style="color:#f97316;">${textBar(severityCounts.major || 0, maxSev)}</span>
+        <span style="margin-left:10px;color:#e4e7eb;">${severityCounts.major || 0}</span>
       </div>
-      <div style="display: flex; align-items: center;">
-        <span style="width: 80px; color: #eab308;">Minor:</span>
-        <span style="color: #eab308;">${generateTextBarChart(severityCounts.minor || 0, maxSeverity)}</span>
-        <span style="margin-left: 10px; color: #e4e7eb;">${severityCounts.minor || 0}</span>
+      <div style="display:flex;align-items:center;">
+        <span style="width:80px;color:#eab308;">Minor:</span>
+        <span style="color:#eab308;">${textBar(severityCounts.minor || 0, maxSev)}</span>
+        <span style="margin-left:10px;color:#e4e7eb;">${severityCounts.minor || 0}</span>
       </div>
-    </div>
-  `;
+    </div>`;
 
-  // Daily Alert Trend Chart
   const sortedDates = Object.keys(dailyTrend).sort();
-  const last7Days = sortedDates.slice(-7);
-  const maxDailyAlerts = Math.max(...last7Days.map(date => dailyTrend[date] || 0), 1);
-
+  const last7Days   = sortedDates.slice(-7);
+  const maxDaily    = Math.max(...last7Days.map(d => dailyTrend[d] || 0), 1);
   const dailyTrendChartHtml = last7Days.length > 0 ? `
-    <div style="font-family: monospace; font-size: 11px; line-height: 2.2; padding: 10px 0;">
+    <div style="font-family:monospace;font-size:11px;line-height:2.2;padding:8px 0;">
       ${last7Days.map(date => {
         const count = dailyTrend[date] || 0;
-        const dateObj = new Date(date + 'T00:00:00Z');
-        const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' });
-        const barWidth = Math.round((count / maxDailyAlerts) * 40);
+        const label = new Date(date + 'T00:00:00Z')
+          .toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' });
+        const fill = Math.round((count / maxDaily) * 40);
         return `
-          <div style="display: flex; align-items: center; margin-bottom: 6px;">
-            <span style="width: 70px; color: #94a3b8;">${dayName}:</span>
-            <span style="color: #3b82f6;">${'█'.repeat(barWidth)}${'░'.repeat(40 - barWidth)}</span>
-            <span style="margin-left: 10px; color: #e4e7eb; font-weight: bold;">${count}</span>
-          </div>
-        `;
+          <div style="display:flex;align-items:center;margin-bottom:4px;">
+            <span style="width:70px;color:#94a3b8;">${label}:</span>
+            <span style="color:#3b82f6;">${'█'.repeat(fill)}${'░'.repeat(40 - fill)}</span>
+            <span style="margin-left:10px;color:#e4e7eb;font-weight:bold;">${count}</span>
+          </div>`;
       }).join('')}
-    </div>
-  ` : '<div style="color: #64748b; padding: 20px;">No alert data available for the last 7 days</div>';
+    </div>`
+    : '<div style="color:#64748b;padding:16px;">No data for the last 7 days</div>';
 
-  // Agent Health Chart
-  const totalAgents = agentSummary.total_agents || 0;
-  const activeAgents = agentSummary.active_agents || 0;
-  const disconnectedAgents = agentSummary.disconnected_agents || 0;
-  const neverConnectedAgents = agentSummary.never_connected || 0;
-  const healthPercentage = totalAgents > 0 ? Math.round((activeAgents / totalAgents) * 100) : 0;
+  const total    = agentSummary.total_agents        || 0;
+  const active   = agentSummary.active_agents       || 0;
+  const disc     = agentSummary.disconnected_agents || 0;
+  const neverC   = agentSummary.never_connected     || 0;
+  const healthPct = total > 0 ? Math.round((active / total) * 100) : 0;
 
-  const agentHealthChartHtml = totalAgents > 0 ? `
-    <div style="font-family: monospace; font-size: 12px; line-height: 2.5; padding: 15px;">
-      <div style="display: flex; align-items: center; margin-bottom: 8px;">
-        <span style="width: 120px; color: #22c55e;">Active:</span>
-        <span style="color: #22c55e;">${generateTextBarChart(activeAgents, totalAgents)}</span>
-        <span style="margin-left: 10px; color: #e4e7eb; font-weight: bold;">${activeAgents}</span>
+  const agentHealthChartHtml = total > 0 ? `
+    <div style="font-family:monospace;font-size:12px;line-height:2.5;padding:12px;">
+      <div style="display:flex;align-items:center;margin-bottom:6px;">
+        <span style="width:140px;color:#22c55e;">Active:</span>
+        <span style="color:#22c55e;">${textBar(active, total)}</span>
+        <span style="margin-left:10px;color:#e4e7eb;font-weight:bold;">${active}</span>
       </div>
-      <div style="display: flex; align-items: center; margin-bottom: 8px;">
-        <span style="width: 120px; color: #ef4444;">Disconnected:</span>
-        <span style="color: #ef4444;">${generateTextBarChart(disconnectedAgents, totalAgents)}</span>
-        <span style="margin-left: 10px; color: #e4e7eb; font-weight: bold;">${disconnectedAgents}</span>
+      <div style="display:flex;align-items:center;margin-bottom:6px;">
+        <span style="width:140px;color:#ef4444;">Disconnected:</span>
+        <span style="color:#ef4444;">${textBar(disc, total)}</span>
+        <span style="margin-left:10px;color:#e4e7eb;font-weight:bold;">${disc}</span>
       </div>
-      <div style="display: flex; align-items: center; margin-bottom: 12px;">
-        <span style="width: 120px; color: #f97316;">Never Connected:</span>
-        <span style="color: #f97316;">${generateTextBarChart(neverConnectedAgents, totalAgents)}</span>
-        <span style="margin-left: 10px; color: #e4e7eb; font-weight: bold;">${neverConnectedAgents}</span>
+      <div style="display:flex;align-items:center;margin-bottom:10px;">
+        <span style="width:140px;color:#f97316;">Never Connected:</span>
+        <span style="color:#f97316;">${textBar(neverC, total)}</span>
+        <span style="margin-left:10px;color:#e4e7eb;font-weight:bold;">${neverC}</span>
       </div>
-      <div style="border-top: 1px solid #334155; padding-top: 12px; margin-top: 12px;">
-        <div style="color: #94a3b8; font-size: 11px;">OVERALL HEALTH</div>
-        <div style="display: flex; align-items: center; margin-top: 8px;">
-          <div style="flex: 1; height: 20px; background: rgba(15, 23, 42, 0.8); border-radius: 10px; overflow: hidden;">
-            <div style="height: 100%; width: ${healthPercentage}%; background: linear-gradient(90deg, #22c55e 0%, #3b82f6 100%);"></div>
+      <div style="border-top:1px solid #334155;padding-top:10px;">
+        <div style="color:#94a3b8;font-size:11px;margin-bottom:6px;">OVERALL HEALTH</div>
+        <div style="display:flex;align-items:center;">
+          <div style="flex:1;height:18px;background:rgba(15,23,42,0.8);border-radius:9px;overflow:hidden;">
+            <div style="height:100%;width:${healthPct}%;background:linear-gradient(90deg,#22c55e,#3b82f6);"></div>
           </div>
-          <span style="margin-left: 15px; color: #22c55e; font-weight: bold; font-size: 16px;">${healthPercentage}%</span>
+          <span style="margin-left:12px;color:#22c55e;font-weight:bold;font-size:15px;">${healthPct}%</span>
         </div>
       </div>
-    </div>
-  ` : '<div style="color: #64748b; padding: 20px; text-align: center;">No agent data available</div>';
+    </div>`
+    : '<div style="color:#64748b;padding:20px;text-align:center;">No agent data available</div>';
 
+  // ─────────────────────────────────────────────────────────────────────────
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SOC ${frequency.charAt(0).toUpperCase() + frequency.slice(1)} Report - ${clientName}</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+  <meta charset="UTF-8">
+  <title>SOC Report — ${organisationName} (${clientName})</title>
+  <style>
+    /* ── Reset ──────────────────────────────────────────────────────────── */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
-            color: #e4e7eb;
-            margin: 0;
-            padding: 0;
-        }
+    html, body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #0f172a !important;
+      color: #e4e7eb;
+    }
 
-        html {
-            background: #0f172a !important;
-        }
+    @page {
+      size: A4;
+      margin: 0;
+    }
 
-        .page {
-            width: 210mm;
-            min-height: 297mm;
-            margin: 0;
-            padding: 0;
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
-            page-break-after: always !important;
-            page-break-before: auto;
-            break-after: page !important;
-            position: relative;
-            box-sizing: border-box;
-        }
+    /* ── Running header — position:fixed repeats on every physical page ─── */
+    .running-header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 16mm;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 20mm;
+      border-bottom: 1px solid #334155;
+      background: #0f172a;
+      font-size: 10px;
+      color: #64748b;
+      z-index: 1000;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .running-header .brand {
+      font-weight: 700;
+      font-size: 11px;
+      color: #3b82f6;
+      letter-spacing: 0.05em;
+    }
+    .running-header .brand span { color: #60a5fa; }
 
-        .page:last-child {
-            page-break-after: auto !important;
-            break-after: auto !important;
-        }
+    /* ── Running footer — position:fixed repeats on every physical page ─── */
+    .running-footer {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      height: 13mm;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 20mm;
+      border-top: 1px solid #334155;
+      background: #0f172a;
+      font-size: 9px;
+      color: #64748b;
+      z-index: 1000;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
 
-        .page-content {
-            width: 100%;
-            padding: 20mm 20mm 30mm 20mm;
-            background: transparent;
-        }
+    /* ── Page blocks ─────────────────────────────────────────────────────── */
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      page-break-after: always;
+      break-after: page;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .page:last-child {
+      page-break-after: auto;
+      break-after: auto;
+    }
 
-        .running-footer {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            width: 100%;
-            height: 20mm;
-            text-align: center;
-            color: #64748b;
-            font-size: 12px;
-            padding-top: 8mm;
-            border-top: 1px solid #334155;
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            box-sizing: border-box;
-            z-index: 1000;
-        }
+    /* Content area: top clears fixed header, bottom clears fixed footer */
+    .page-content {
+      padding: 20mm 20mm 17mm;
+    }
 
-        .cover-page {
-            display: flex;
-            flex-direction: column;
-        }
+    /* Cover page: vertically centred between header and footer */
+    .cover-page .page-content {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      min-height: calc(297mm - 16mm - 13mm);
+    }
 
-        .cover-page .page-content {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            min-height: calc(297mm - 50mm);
-        }
+    /* ── Section header row ──────────────────────────────────────────────── */
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #3b82f6;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .section-title { font-size: 22px; font-weight: 600; color: #e4e7eb; }
+    .section-meta  { font-size: 12px; color: #64748b; }
 
-        .logo {
-            font-size: 48px;
-            font-weight: bold;
-            margin-bottom: 60px;
-            color: #3b82f6;
-        }
+    /* ── CRITICAL: every card-like element must not split across pages ───── */
+    .stat-card,
+    .agent-card,
+    .chart-box,
+    .chart-row,
+    .cis-section,
+    .summary-section,
+    .cis-item,
+    .recommendation-item {
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
+    }
+    /* Table rows must not split either */
+    .alert-table tr {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
 
-        .logo span {
-            color: #60a5fa;
-        }
+    /* ── Chart rows (2-column or full-width) ─────────────────────────────── */
+    .chart-row {
+      display: flex;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+    .chart-row > .chart-box { flex: 1; }
+    .chart-row.full > .chart-box { flex: 1 1 100%; }
 
-        .report-title {
-            font-size: 42px;
-            font-weight: 700;
-            margin-bottom: 20px;
-            color: #e4e7eb;
-        }
+    /* ── Chart box ───────────────────────────────────────────────────────── */
+    .chart-box {
+      background: rgba(30,41,59,0.6);
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 18px;
+    }
+    .chart-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #3b82f6;
+      margin-bottom: 14px;
+    }
 
-        .report-subtitle {
-            font-size: 24px;
-            color: #94a3b8;
-            margin-bottom: 80px;
-        }
+    /* ── Stat card ───────────────────────────────────────────────────────── */
+    .stat-card {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(15,23,42,0.8);
+      padding: 13px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+    }
+    .stat-label { color: #94a3b8; font-size: 13px; }
+    .stat-value { font-size: 22px; font-weight: 700; color: #3b82f6; }
 
-        .client-info {
-            background: rgba(30, 41, 59, 0.6);
-            padding: 40px 60px;
-            border-radius: 12px;
-            border: 1px solid #334155;
-            margin-bottom: 60px;
-        }
+    /* ── Alert table ─────────────────────────────────────────────────────── */
+    .alert-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    .alert-table th {
+      background: #1e293b;
+      color: #3b82f6;
+      padding: 12px 14px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 13px;
+      border-bottom: 2px solid #3b82f6;
+    }
+    .alert-table td {
+      padding: 11px 14px;
+      border-bottom: 1px solid #334155;
+      font-size: 12px;
+    }
 
-        .client-name {
-            font-size: 32px;
-            font-weight: 600;
-            color: #3b82f6;
-            margin-bottom: 15px;
-        }
+    /* ── Severity badges ─────────────────────────────────────────────────── */
+    .severity-badge {
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      display: inline-block;
+    }
+    .severity-critical { background:rgba(239,68,68,0.2); color:#ef4444; border:1px solid #ef4444; }
+    .severity-major    { background:rgba(249,115,22,0.2); color:#f97316; border:1px solid #f97316; }
+    .severity-minor    { background:rgba(234,179,8,0.2);  color:#eab308; border:1px solid #eab308; }
 
-        .company-name {
-            font-size: 20px;
-            color: #cbd5e1;
-        }
+    /* ── Agent grid ──────────────────────────────────────────────────────── */
+    .agent-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .agent-card {
+      background: rgba(30,41,59,0.6);
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .agent-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .agent-title  { font-size: 14px; font-weight: 600; color: #cbd5e1; }
+    .agent-detail { font-size: 12px; color: #94a3b8; margin-top: 3px; }
+    .status-indicator { padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+    .status-online  { background:rgba(34,197,94,0.2); color:#22c55e; }
+    .status-offline { background:rgba(239,68,68,0.2); color:#ef4444; }
 
-        .report-period {
-            font-size: 18px;
-            color: #94a3b8;
-            margin-top: 60px;
-        }
+    /* ── CIS sections ────────────────────────────────────────────────────── */
+    .cis-section {
+      background: rgba(30,41,59,0.6);
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+    .cis-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .cis-title { font-size: 15px; font-weight: 600; color: #3b82f6; }
+    .compliance-score { font-size: 24px; font-weight: 700; color: #22c55e; }
+    .cis-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid #334155;
+    }
+    .cis-item:last-child { border-bottom: none; }
 
-        .footer-info {
-            text-align: center;
-            color: #64748b;
-            font-size: 14px;
-            padding-top: 20px;
-            margin-top: 40px;
-            border-top: 1px solid #334155;
-        }
+    /* ── Progress bar ────────────────────────────────────────────────────── */
+    .progress-bar {
+      width: 100%; height: 10px;
+      background: rgba(15,23,42,0.8);
+      border-radius: 5px;
+      overflow: hidden;
+      margin: 8px 0;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #3b82f6 0%, #22c55e 100%);
+    }
 
-        .page-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-            padding-bottom: 15px;
-            border-bottom: 2px solid #3b82f6;
-        }
+    /* ── Summary sections ────────────────────────────────────────────────── */
+    .summary-section {
+      background: rgba(30,41,59,0.6);
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+    .summary-section-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #3b82f6;
+      margin-bottom: 12px;
+    }
+    .summary-text {
+      color: #cbd5e1;
+      line-height: 1.8;
+      font-size: 13px;
+      margin-bottom: 12px;
+    }
+    .recommendation-item {
+      padding: 9px 0 9px 22px;
+      position: relative;
+      color: #cbd5e1;
+      font-size: 13px;
+      line-height: 1.6;
+      border-bottom: 1px solid #1e293b;
+    }
+    .recommendation-item:last-child { border-bottom: none; }
+    .recommendation-item::before {
+      content: "▸";
+      position: absolute;
+      left: 0;
+      color: #3b82f6;
+      font-weight: bold;
+    }
 
-        .page-title {
-            font-size: 28px;
-            font-weight: 600;
-            color: #e4e7eb;
-        }
+    /* ── Cover elements ──────────────────────────────────────────────────── */
+    .logo        { font-size: 44px; font-weight: bold; color: #3b82f6; margin-bottom: 50px; }
+    .logo span   { color: #60a5fa; }
+    .report-title    { font-size: 36px; font-weight: 700; color: #e4e7eb; margin-bottom: 14px; }
+    .report-subtitle { font-size: 20px; color: #94a3b8; margin-bottom: 60px; }
+    .client-info {
+      background: rgba(30,41,59,0.6);
+      padding: 32px 52px;
+      border-radius: 12px;
+      border: 1px solid #334155;
+      margin-bottom: 50px;
+    }
+    .client-name   { font-size: 26px; font-weight: 600; color: #3b82f6; margin-bottom: 10px; }
+    .report-period { font-size: 15px; color: #94a3b8; margin-top: 40px; }
 
-        .page-number {
-            font-size: 14px;
-            color: #64748b;
-        }
-
-        .alert-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-
-        .alert-table th {
-            background: #1e293b;
-            color: #3b82f6;
-            padding: 15px;
-            text-align: left;
-            font-weight: 600;
-            font-size: 14px;
-            border-bottom: 2px solid #3b82f6;
-        }
-
-        .alert-table td {
-            padding: 12px 15px;
-            border-bottom: 1px solid #334155;
-            font-size: 13px;
-        }
-
-        .alert-table tr:hover {
-            background: rgba(59, 130, 246, 0.1);
-        }
-
-        .severity-badge {
-            padding: 4px 12px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 600;
-            display: inline-block;
-        }
-
-        .severity-critical {
-            background: rgba(239, 68, 68, 0.2);
-            color: #ef4444;
-            border: 1px solid #ef4444;
-        }
-
-        .severity-major {
-            background: rgba(249, 115, 22, 0.2);
-            color: #f97316;
-            border: 1px solid #f97316;
-        }
-
-        .severity-minor {
-            background: rgba(234, 179, 8, 0.2);
-            color: #eab308;
-            border: 1px solid #eab308;
-        }
-
-        .chart-container {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            margin-top: 20px;
-        }
-
-        .chart-box {
-            background: rgba(30, 41, 59, 0.6);
-            border: 1px solid #334155;
-            border-radius: 8px;
-            padding: 20px;
-        }
-
-        .chart-box.full-width {
-            grid-column: 1 / -1;
-        }
-
-        .chart-title {
-            font-size: 16px;
-            font-weight: 600;
-            color: #3b82f6;
-            margin-bottom: 15px;
-        }
-
-        .stat-card {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: rgba(15, 23, 42, 0.8);
-            padding: 15px;
-            border-radius: 6px;
-            margin-bottom: 10px;
-        }
-
-        .stat-label {
-            color: #94a3b8;
-            font-size: 14px;
-        }
-
-        .stat-value {
-            font-size: 24px;
-            font-weight: 700;
-            color: #3b82f6;
-        }
-
-        .chart-placeholder {
-            width: 100%;
-            height: 200px;
-            background: rgba(15, 23, 42, 0.6);
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #64748b;
-            border: 1px dashed #334155;
-            text-align: center;
-            padding: 20px;
-            line-height: 1.6;
-        }
-
-        .agent-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 20px;
-            margin-top: 20px;
-        }
-
-        .agent-card {
-            background: rgba(30, 41, 59, 0.6);
-            border: 1px solid #334155;
-            border-radius: 8px;
-            padding: 20px;
-        }
-
-        .agent-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-
-        .agent-title {
-            font-size: 16px;
-            font-weight: 600;
-            color: #cbd5e1;
-        }
-
-        .status-indicator {
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-        }
-
-        .status-online {
-            background: rgba(34, 197, 94, 0.2);
-            color: #22c55e;
-        }
-
-        .status-offline {
-            background: rgba(239, 68, 68, 0.2);
-            color: #ef4444;
-        }
-
-        .status-active {
-            background: rgba(59, 130, 246, 0.2);
-            color: #3b82f6;
-        }
-
-        .agent-count {
-            font-size: 36px;
-            font-weight: 700;
-            color: #3b82f6;
-            margin: 10px 0;
-        }
-
-        .agent-detail {
-            font-size: 13px;
-            color: #94a3b8;
-            margin-top: 5px;
-        }
-
-        .cis-section {
-            background: rgba(30, 41, 59, 0.6);
-            border: 1px solid #334155;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-
-        .cis-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-
-        .cis-title {
-            font-size: 18px;
-            font-weight: 600;
-            color: #3b82f6;
-        }
-
-        .compliance-score {
-            font-size: 28px;
-            font-weight: 700;
-            color: #22c55e;
-        }
-
-        .progress-bar {
-            width: 100%;
-            height: 12px;
-            background: rgba(15, 23, 42, 0.8);
-            border-radius: 6px;
-            overflow: hidden;
-            margin: 10px 0;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #3b82f6 0%, #22c55e 100%);
-            transition: width 0.3s ease;
-        }
-
-        .cis-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 12px 0;
-            border-bottom: 1px solid #334155;
-        }
-
-        .cis-item:last-child {
-            border-bottom: none;
-        }
-
-        .summary-section {
-            background: rgba(30, 41, 59, 0.6);
-            border: 1px solid #334155;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-
-        .section-title {
-            font-size: 20px;
-            font-weight: 600;
-            color: #3b82f6;
-            margin-bottom: 15px;
-        }
-
-        .summary-text {
-            color: #cbd5e1;
-            line-height: 1.8;
-            font-size: 14px;
-            margin-bottom: 15px;
-        }
-
-        .recommendation-list {
-            list-style: none;
-        }
-
-        .recommendation-list li {
-            padding: 10px 0 10px 25px;
-            position: relative;
-            color: #cbd5e1;
-            font-size: 14px;
-            line-height: 1.6;
-        }
-
-        .recommendation-list li:before {
-            content: "▸";
-            position: absolute;
-            left: 0;
-            color: #3b82f6;
-            font-weight: bold;
-        }
-
-        @page {
-            size: A4;
-            margin: 0;
-        }
-
-        @media print {
-            * {
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-                color-adjust: exact !important;
-            }
-            html, body {
-                background: #0f172a !important;
-                margin: 0;
-                height: 100%;
-            }
-            .page {
-                margin: 0;
-                box-shadow: none;
-                background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
-                page-break-after: always !important;
-                break-after: page !important;
-            }
-            .page:last-child {
-                page-break-after: auto !important;
-                break-after: auto !important;
-            }
-        }
-    </style>
+    /* ── Print fidelity ──────────────────────────────────────────────────── */
+    @media print {
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+      }
+      html, body { background: #0f172a !important; }
+    }
+  </style>
 </head>
 <body>
-    <!-- Page 1: Cover Page -->
-    <div class="page cover-page">
-        <div class="page-content">
-            <div class="logo">CODEC <span>NET</span></div>
-            <h1 class="report-title">Security Operations Center</h1>
-            <h2 class="report-subtitle">${frequency.charAt(0).toUpperCase() + frequency.slice(1)} Report</h2>
 
-            <div class="client-info">
-                <div class="client-name">${organisationName}</div>
-                <div style="margin-top: 15px; font-size: 18px; color: #94a3b8;">${template}</div>
-            </div>
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- RUNNING HEADER — fixed, repeats on every physical page      -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="running-header">
+  <span class="brand">CODEC<span>NET</span></span>
+  <span>${organisationName} — SOC Security Report</span>
+  <span>Generated: ${generationDate}</span>
+</div>
 
-            <div class="report-period">
-                Report Period: ${periodStr}
-            </div>
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- RUNNING FOOTER — fixed, repeats on every physical page      -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="running-footer">
+  <span>Codec Networks SOC &nbsp;|&nbsp; ${frequency.charAt(0).toUpperCase() + frequency.slice(1)} Report</span>
+  <span style="font-weight:600;color:#475569;letter-spacing:0.08em;">CONFIDENTIAL</span>
+  <span>&copy; ${now.getFullYear()} Codec Networks</span>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- PAGE 1 — Cover                                             -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="page cover-page">
+  <div class="page-content">
+    <div class="logo">CODEC <span>NET</span></div>
+    <h1 class="report-title">Security Operations Center</h1>
+    <h2 class="report-subtitle">${frequency.charAt(0).toUpperCase() + frequency.slice(1)} Report</h2>
+
+    <div class="client-info">
+      <div class="client-name">${organisationName}</div>
+      <div style="margin-top:10px;font-size:15px;color:#94a3b8;">${template}</div>
+    </div>
+
+    <div class="report-period">Report Period: ${periodStr}</div>
+    <div style="margin-top:16px;font-size:12px;color:#475569;">Generated: ${generationDate}</div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- PAGE 2 — Top 10 Security Alerts                            -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-content">
+    <div class="section-header">
+      <h2 class="section-title">Top 10 Security Alerts</h2>
+      <span class="section-meta">${periodStr}</span>
+    </div>
+
+    <table class="alert-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Severity</th>
+          <th>Alert Description</th>
+          <th>Host / Agent</th>
+          <th>Count</th>
+          <th>Last Seen</th>
+        </tr>
+      </thead>
+      <tbody>${topAlertsHtml}</tbody>
+    </table>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- PAGE 3 — Alert Statistics & Trends                         -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-content">
+    <div class="section-header">
+      <h2 class="section-title">Alert Statistics &amp; Trends</h2>
+      <span class="section-meta">${periodStr}</span>
+    </div>
+
+    <div class="chart-row">
+      <div class="chart-box">
+        <h3 class="chart-title">Alert Distribution</h3>
+        ${generateStatCard('Critical',     severityCounts.critical || 0)}
+        ${generateStatCard('Major',        severityCounts.major    || 0)}
+        ${generateStatCard('Minor',        severityCounts.minor    || 0)}
+        ${generateStatCard('Total Alerts', severityCounts.total    || 0)}
+      </div>
+      <div class="chart-box">
+        <h3 class="chart-title">Alert Severity Breakdown</h3>
+        <div style="padding:14px 0;">
+          ${severityChartHtml}
+          <div style="margin-top:14px;font-size:12px;color:#94a3b8;">
+            Critical: ${severityPct.critical || 0}% &nbsp;|&nbsp;
+            Major: ${severityPct.major || 0}% &nbsp;|&nbsp;
+            Minor: ${severityPct.minor || 0}%
+          </div>
         </div>
+      </div>
     </div>
 
-    <!-- Page 2: Top 10 Alerts -->
-    <div class="page">
-        <div class="page-content">
-            <div class="page-header">
-                <h2 class="page-title">Top 10 Security Alerts</h2>
-                <span class="page-number">Page 2 of 6</span>
-            </div>
-
-            <table class="alert-table">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Severity</th>
-                        <th>Alert Description</th>
-                        <th>Host/Agent</th>
-                        <th>Count</th>
-                        <th>Last Seen</th>
-                    </tr>
-                </thead>
-                <tbody>
-${topAlertsHtml}
-                </tbody>
-            </table>
-        </div>
+    <div class="chart-row full">
+      <div class="chart-box">
+        <h3 class="chart-title">Daily Alert Trend (Last 7 Days)</h3>
+        ${dailyTrendChartHtml}
+      </div>
     </div>
 
-    <!-- Page 3: Charts & Statistics -->
-    <div class="page">
-        <div class="page-content">
-            <div class="page-header">
-                <h2 class="page-title">Alert Statistics & Trends</h2>
-                <span class="page-number">Page 3 of 6</span>
-            </div>
+    <div class="chart-row full">
+      <div class="chart-box">
+        <h3 class="chart-title">Top 5 Alert Types</h3>
+        ${alertTypeCards || generateStatCard('No alert type data available', '—')}
+      </div>
+    </div>
+  </div>
+</div>
 
-            <div class="chart-container">
-                <div class="chart-box">
-                    <h3 class="chart-title">Alert Distribution</h3>
-                    ${generateStatCard('Critical', severityCounts.critical || 0)}
-                    ${generateStatCard('Major', severityCounts.major || 0)}
-                    ${generateStatCard('Minor', severityCounts.minor || 0)}
-                    ${generateStatCard('Total Alerts', severityCounts.total || 0)}
-                </div>
 
-                <div class="chart-box">
-                    <h3 class="chart-title">Alert Severity Breakdown</h3>
-                    <div style="padding: 20px;">
-                        ${severityChartHtml}
-                        <div style="margin-top: 20px; font-size: 13px; color: #94a3b8;">
-                            Critical: ${severityPercentages.critical || 0}% |
-                            Major: ${severityPercentages.major || 0}% |
-                            Minor: ${severityPercentages.minor || 0}%
-                        </div>
-                    </div>
-                </div>
-
-                <div class="chart-box full-width">
-                    <h3 class="chart-title">Daily Alert Trend (Last 7 Days)</h3>
-                    ${dailyTrendChartHtml}
-                </div>
-
-                <div class="chart-box full-width">
-                    <h3 class="chart-title">Top 5 Alert Types</h3>
-                    ${alertTypeCards || '<div class="stat-card"><span class="stat-label">No alert type data available</span></div>'}
-                </div>
-            </div>
-        </div>
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- PAGE 4 — Agent Status Overview                             -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-content">
+    <div class="section-header">
+      <h2 class="section-title">Agent Status Overview</h2>
+      <span class="section-meta">${total} agents total</span>
     </div>
 
-    <!-- Page 4: Agent Status -->
-    <div class="page">
-        <div class="page-content">
-            <div class="page-header">
-                <h2 class="page-title">Agent Status Overview</h2>
-                <span class="page-number">Page 4 of 6</span>
-            </div>
-
-            <div class="chart-container" style="margin-bottom: 20px;">
-                <div class="chart-box">
-                    <h3 class="chart-title">Agent Summary</h3>
-                    ${generateStatCard('Total Agents', agentSummary.total_agents || 0)}
-                    ${generateStatCard('Active', agentSummary.active_agents || 0)}
-                    ${generateStatCard('Disconnected', agentSummary.disconnected_agents || 0)}
-                    ${generateStatCard('Never Connected', agentSummary.never_connected || 0)}
-                </div>
-                <div class="chart-box">
-                    <h3 class="chart-title">Agent Health Status</h3>
-                    ${agentHealthChartHtml}
-                </div>
-            </div>
-
-            ${agentsCardsHtml ? `
-            <h3 class="chart-title" style="margin-top: 20px; margin-bottom: 10px;">Agent Details</h3>
-            <div class="agent-grid">
-                ${agentsCardsHtml}
-            </div>
-            ` : '<div class="chart-box full-width"><span class="stat-label">No agent details available</span></div>'}
-        </div>
+    <div class="chart-row">
+      <div class="chart-box">
+        <h3 class="chart-title">Agent Summary</h3>
+        ${generateStatCard('Total Agents',    agentSummary.total_agents        || 0)}
+        ${generateStatCard('Active',          agentSummary.active_agents       || 0)}
+        ${generateStatCard('Disconnected',    agentSummary.disconnected_agents || 0)}
+        ${generateStatCard('Never Connected', agentSummary.never_connected     || 0)}
+      </div>
+      <div class="chart-box">
+        <h3 class="chart-title">Agent Health Status</h3>
+        ${agentHealthChartHtml}
+      </div>
     </div>
 
-    <!-- Page 5: CIS Compliance -->
-    <div class="page">
-        <div class="page-content">
-            <div class="page-header">
-                <h2 class="page-title">CIS Compliance Status</h2>
-                <span class="page-number">Page 5 of 6</span>
-            </div>
+    ${agentsCardsHtml ? `
+    <h3 class="chart-title" style="margin:18px 0 12px;">Agent Details</h3>
+    <div class="agent-grid">${agentsCardsHtml}</div>` : `
+    <div class="chart-box" style="margin-top:16px;">
+      <span class="stat-label">No agent details available</span>
+    </div>`}
+  </div>
+</div>
 
-            <div class="cis-section">
-                <div class="cis-header">
-                    <span class="cis-title">Overall Compliance Score</span>
-                    <span class="compliance-score">${cisData.overall_score || 0}%</span>
-                </div>
-                <div class="progress-bar">
-                    <div class="progress-fill" style="width: ${cisData.overall_score || 0}%;"></div>
-                </div>
-            </div>
 
-            <div class="cis-section">
-                <h3 class="cis-title">Security Configuration Assessment - Per Policy</h3>
-                ${cisItemsHtml}
-            </div>
-
-            <div class="cis-section">
-                <h3 class="cis-title">Agent Compliance Scores</h3>
-                ${agentsCisHtml}
-            </div>
-
-            <div class="cis-section">
-                <h3 class="cis-title">Configuration Findings Summary</h3>
-                ${generateStatCard('Total Checks', cisData.total_checks || 0)}
-                <div class="stat-card">
-                    <span class="stat-label">Passed</span>
-                    <span class="stat-value" style="font-size: 20px; color: #22c55e;">${cisData.total_passed || 0}</span>
-                </div>
-                <div class="stat-card">
-                    <span class="stat-label">Failed</span>
-                    <span class="stat-value" style="font-size: 20px; color: #ef4444;">${cisData.total_failed || 0}</span>
-                </div>
-            </div>
-        </div>
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- PAGE 5 — CIS Compliance Status                             -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-content">
+    <div class="section-header">
+      <h2 class="section-title">CIS Compliance Status</h2>
+      <span class="section-meta">SCA Score: ${cisData.overall_score || 0}%</span>
     </div>
 
-    <!-- Page 6: Executive Summary -->
-    <div class="page">
-        <div class="page-content">
-            <div class="page-header">
-                <h2 class="page-title">Executive Summary</h2>
-                <span class="page-number">Page 6 of 6</span>
-            </div>
-
-            <div class="summary-section">
-                <h3 class="section-title">Overview</h3>
-                <p class="summary-text">
-                    During the reporting period of ${periodStr}, our Security Operations Center monitored
-                    and analyzed ${severityCounts.total || 0} security alerts across your infrastructure.
-                    The alert distribution shows ${severityCounts.critical || 0} critical alerts,
-                    ${severityCounts.major || 0} major alerts, and ${severityCounts.minor || 0} minor alerts.
-                </p>
-                <p class="summary-text">
-                    Our team has been actively monitoring, triaging, and responding to security events in real-time.
-                    ${agentSummary.total_agents || 0} agents are deployed across your infrastructure, with
-                    ${agentSummary.active_agents || 0} currently active.
-                </p>
-                ${cisData.overall_score ? `
-                <p class="summary-text">
-                    Security configuration assessment shows an overall compliance score of ${cisData.overall_score}%
-                    with ${cisData.total_failed || 0} failed checks requiring attention.
-                </p>
-                ` : ''}
-            </div>
-        </div>
+    <div class="cis-section">
+      <div class="cis-header">
+        <span class="cis-title">Overall Compliance Score</span>
+        <span class="compliance-score">${cisData.overall_score || 0}%</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" style="width:${cisData.overall_score || 0}%;"></div>
+      </div>
     </div>
 
-    <div class="running-footer">
-        Codec Networks SOC | ${frequency.charAt(0).toUpperCase() + frequency.slice(1)} Report | Confidential
+    <div class="cis-section">
+      <h3 class="cis-title" style="margin-bottom:12px;">Configuration Findings Summary</h3>
+      ${generateStatCard('Total Checks', cisData.total_checks || 0)}
+      <div class="stat-card">
+        <span class="stat-label">Passed</span>
+        <span class="stat-value" style="font-size:20px;color:#22c55e;">${cisData.total_passed || 0}</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Failed</span>
+        <span class="stat-value" style="font-size:20px;color:#ef4444;">${cisData.total_failed || 0}</span>
+      </div>
     </div>
+
+    <div class="cis-section">
+      <h3 class="cis-title" style="margin-bottom:12px;">Security Configuration Assessment — Per Policy</h3>
+      ${cisItemsHtml}
+    </div>
+
+    <div class="cis-section">
+      <h3 class="cis-title" style="margin-bottom:12px;">Agent Compliance Scores</h3>
+      ${agentsCisHtml}
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- PAGE 6 — Executive Summary                                 -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="page-content">
+    <div class="section-header">
+      <h2 class="section-title">Executive Summary</h2>
+      <span class="section-meta">${periodStr}</span>
+    </div>
+
+    <div class="summary-section">
+      <h3 class="summary-section-title">Overview</h3>
+      <p class="summary-text">
+        During the reporting period of ${periodStr}, the Security Operations Center monitored
+        and analysed <strong>${severityCounts.total || 0}</strong> security alerts across your infrastructure.
+        The distribution shows <strong>${severityCounts.critical || 0}</strong> critical,
+        <strong>${severityCounts.major || 0}</strong> major, and
+        <strong>${severityCounts.minor || 0}</strong> minor alerts.
+      </p>
+      <p class="summary-text">
+        <strong>${agentSummary.total_agents || 0}</strong> agents are deployed across your infrastructure,
+        with <strong>${agentSummary.active_agents || 0}</strong> currently active and
+        <strong>${agentSummary.disconnected_agents || 0}</strong> disconnected.
+      </p>
+      ${cisData.overall_score ? `
+      <p class="summary-text">
+        Security configuration assessment shows an overall compliance score of
+        <strong>${cisData.overall_score}%</strong> with
+        <strong>${cisData.total_failed || 0}</strong> failed checks requiring attention.
+      </p>` : ''}
+    </div>
+
+    <div class="summary-section">
+      <h3 class="summary-section-title">Key Recommendations</h3>
+      ${severityCounts.critical > 0 ? `
+      <div class="recommendation-item">
+        Investigate and remediate the ${severityCounts.critical} critical alert(s) immediately.
+        Critical alerts indicate a high probability of active threat activity or serious misconfiguration.
+      </div>` : ''}
+      ${agentSummary.disconnected_agents > 0 ? `
+      <div class="recommendation-item">
+        Reconnect or retire ${agentSummary.disconnected_agents} disconnected agent(s) to restore
+        full visibility across the monitored infrastructure.
+      </div>` : ''}
+      ${cisData.total_failed > 0 ? `
+      <div class="recommendation-item">
+        Address ${cisData.total_failed} failed CIS compliance check(s) to improve the security
+        configuration baseline.
+      </div>` : ''}
+      <div class="recommendation-item">
+        Review the Top 10 alerts for recurring patterns; high-frequency recurring alerts may indicate
+        persistent misconfigurations or active threat campaigns.
+      </div>
+      <div class="recommendation-item">
+        Ensure all agents are running the latest Wazuh version to benefit from the most recent
+        detection rules and security patches.
+      </div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>`;
 }

@@ -489,7 +489,7 @@ const generateReport = asyncHandler(async (req, res) => {
     // Generate PDF using Puppeteer
     console.log('Generating PDF...');
     const browser = await puppeteer.launch({
-      headless: 'new',
+      headless: true,
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -508,7 +508,6 @@ const generateReport = asyncHandler(async (req, res) => {
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
-      preferCSSPageSize: true,
       margin: { top: '0px', right: '0px', bottom: '0px', left: '0px' }
     });
 
