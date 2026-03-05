@@ -2,13 +2,10 @@
  * HTML Report Template Generator for SOC Report
  *
  * Layout strategy:
- *  - Explicit <div class="page"> blocks with page-break-after: always
- *    give Puppeteer clean, predictable page boundaries.
- *  - position: fixed header + footer appear on EVERY physical page
- *    (Puppeteer repeats fixed elements across pages).
- *  - break-inside: avoid on every card/section prevents elements from
- *    splitting mid-element when content overflows to the next page.
- *  - .page-content bottom-padding keeps content above the fixed footer.
+ *  - Simple page layout with proper margins
+ *  - No fixed headers/footers to avoid content overlap
+ *  - break-inside: avoid on all cards to prevent splitting across pages
+ *  - page-break-before/after for explicit page breaks
  */
 
 function generateSeverityBadge(severity) {
@@ -224,108 +221,101 @@ export function generateHtmlReport(clientName, organisationName, statistics, rep
   <meta charset="UTF-8">
   <title>SOC Report — ${organisationName} (${clientName})</title>
   <style>
-    /* ── Reset ──────────────────────────────────────────────────────────── */
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-
-    html, body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: #0f172a !important;
-      color: #e4e7eb;
+    /* ── Reset and Base Styles ─────────────────────────────────────────── */
+    * { 
+      margin: 0; 
+      padding: 0; 
+      box-sizing: border-box; 
     }
 
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #0f172a;
+      color: #e4e7eb;
+      line-height: 1.5;
+    }
+
+    /* ── Print Settings ────────────────────────────────────────────────── */
     @page {
       size: A4;
-      margin: 0;
+      margin: 20mm 15mm 20mm 15mm; /* top right bottom left */
     }
 
-    /* ── Running header — position:fixed repeats on every physical page ─── */
-    .running-header {
-      position: fixed;
-      top: 0; left: 0; right: 0;
-      height: 16mm;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0 20mm;
-      border-bottom: 1px solid #334155;
-      background: #0f172a;
-      font-size: 10px;
-      color: #64748b;
-      z-index: 1000;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-    .running-header .brand {
-      font-weight: 700;
-      font-size: 11px;
-      color: #3b82f6;
-      letter-spacing: 0.05em;
-    }
-    .running-header .brand span { color: #60a5fa; }
-
-    /* ── Running footer — position:fixed repeats on every physical page ─── */
-    .running-footer {
-      position: fixed;
-      bottom: 0; left: 0; right: 0;
-      height: 13mm;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0 20mm;
-      border-top: 1px solid #334155;
-      background: #0f172a;
-      font-size: 9px;
-      color: #64748b;
-      z-index: 1000;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
+    @media print {
+      body {
+        background: #0f172a;
+        padding: 0;
+      }
+      
+      .page {
+        page-break-after: always;
+        break-after: page;
+      }
+      
+      .page:last-child {
+        page-break-after: auto;
+        break-after: auto;
+      }
     }
 
-    /* ── Page blocks ─────────────────────────────────────────────────────── */
+    /* ── Page Container ────────────────────────────────────────────────── */
     .page {
-      width: 210mm;
-      min-height: 297mm;
+      width: 100%;
+      max-width: 210mm;
+      margin: 0 auto;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      padding: 5mm 0;
       page-break-after: always;
       break-after: page;
-      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
     }
+
     .page:last-child {
       page-break-after: auto;
       break-after: auto;
     }
 
-    /* Content area: top clears fixed header, bottom clears fixed footer */
     .page-content {
-      padding: 20mm 20mm 17mm;
+      padding: 0 10mm;
     }
 
-    /* Cover page: vertically centred between header and footer */
-    .cover-page .page-content {
+    /* ── Cover Page ────────────────────────────────────────────────────── */
+    .cover-page {
       display: flex;
-      flex-direction: column;
-      justify-content: center;
       align-items: center;
-      text-align: center;
-      min-height: calc(297mm - 16mm - 13mm);
+      justify-content: center;
+      min-height: 277mm; /* A4 height minus margins */
     }
 
-    /* ── Section header row ──────────────────────────────────────────────── */
+    .cover-page .page-content {
+      text-align: center;
+      width: 100%;
+    }
+
+    /* ── Section Headers ───────────────────────────────────────────────── */
     .section-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 20px;
-      padding-bottom: 12px;
+      margin: 10mm 0 8mm 0;
+      padding-bottom: 5mm;
       border-bottom: 2px solid #3b82f6;
-      break-inside: avoid;
-      page-break-inside: avoid;
+      page-break-after: avoid;
     }
-    .section-title { font-size: 22px; font-weight: 600; color: #e4e7eb; }
-    .section-meta  { font-size: 12px; color: #64748b; }
 
-    /* ── CRITICAL: every card-like element must not split across pages ───── */
+    .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: #e4e7eb;
+    }
+
+    .section-meta {
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    /* ── CRITICAL: Prevent splitting of elements across pages ──────────── */
     .stat-card,
     .agent-card,
     .chart-box,
@@ -333,173 +323,258 @@ export function generateHtmlReport(clientName, organisationName, statistics, rep
     .cis-section,
     .summary-section,
     .cis-item,
-    .recommendation-item {
+    .recommendation-item,
+    .alert-table tr,
+    .agent-grid > * {
       break-inside: avoid !important;
       page-break-inside: avoid !important;
     }
-    /* Table rows must not split either */
-    .alert-table tr {
-      break-inside: avoid;
-      page-break-inside: avoid;
-    }
 
-    /* ── Chart rows (2-column or full-width) ─────────────────────────────── */
+    /* ── Chart Layout ──────────────────────────────────────────────────── */
     .chart-row {
       display: flex;
-      gap: 18px;
-      margin-bottom: 18px;
+      gap: 8mm;
+      margin-bottom: 8mm;
+      flex-wrap: wrap;
     }
-    .chart-row > .chart-box { flex: 1; }
-    .chart-row.full > .chart-box { flex: 1 1 100%; }
 
-    /* ── Chart box ───────────────────────────────────────────────────────── */
+    .chart-row > .chart-box {
+      flex: 1 1 calc(50% - 4mm);
+      min-width: 80mm;
+    }
+
+    .chart-row.full > .chart-box {
+      flex: 1 1 100%;
+    }
+
     .chart-box {
-      background: rgba(30,41,59,0.6);
+      background: rgba(30, 41, 59, 0.6);
       border: 1px solid #334155;
       border-radius: 8px;
-      padding: 18px;
-    }
-    .chart-title {
-      font-size: 15px;
-      font-weight: 600;
-      color: #3b82f6;
-      margin-bottom: 14px;
+      padding: 6mm;
     }
 
-    /* ── Stat card ───────────────────────────────────────────────────────── */
+    .chart-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #3b82f6;
+      margin-bottom: 6mm;
+    }
+
+    /* ── Stat Cards ────────────────────────────────────────────────────── */
     .stat-card {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background: rgba(15,23,42,0.8);
-      padding: 13px;
+      background: rgba(15, 23, 42, 0.8);
+      padding: 4mm 6mm;
       border-radius: 6px;
-      margin-bottom: 10px;
+      margin-bottom: 3mm;
     }
-    .stat-label { color: #94a3b8; font-size: 13px; }
-    .stat-value { font-size: 22px; font-weight: 700; color: #3b82f6; }
 
-    /* ── Alert table ─────────────────────────────────────────────────────── */
-    .alert-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    .stat-label {
+      color: #94a3b8;
+      font-size: 13px;
+    }
+
+    .stat-value {
+      font-size: 22px;
+      font-weight: 700;
+      color: #3b82f6;
+    }
+
+    /* ── Alert Table ───────────────────────────────────────────────────── */
+    .alert-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 5mm 0;
+    }
+
     .alert-table th {
       background: #1e293b;
       color: #3b82f6;
-      padding: 12px 14px;
+      padding: 4mm 5mm;
       text-align: left;
       font-weight: 600;
-      font-size: 13px;
+      font-size: 12px;
       border-bottom: 2px solid #3b82f6;
     }
+
     .alert-table td {
-      padding: 11px 14px;
+      padding: 4mm 5mm;
       border-bottom: 1px solid #334155;
-      font-size: 12px;
+      font-size: 11px;
     }
 
-    /* ── Severity badges ─────────────────────────────────────────────────── */
+    /* ── Severity Badges ───────────────────────────────────────────────── */
     .severity-badge {
-      padding: 3px 10px;
+      padding: 2mm 4mm;
       border-radius: 4px;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 600;
       display: inline-block;
     }
-    .severity-critical { background:rgba(239,68,68,0.2); color:#ef4444; border:1px solid #ef4444; }
-    .severity-major    { background:rgba(249,115,22,0.2); color:#f97316; border:1px solid #f97316; }
-    .severity-minor    { background:rgba(234,179,8,0.2);  color:#eab308; border:1px solid #eab308; }
 
-    /* ── Agent grid ──────────────────────────────────────────────────────── */
+    .severity-critical {
+      background: rgba(239, 68, 68, 0.2);
+      color: #ef4444;
+      border: 1px solid #ef4444;
+    }
+
+    .severity-major {
+      background: rgba(249, 115, 22, 0.2);
+      color: #f97316;
+      border: 1px solid #f97316;
+    }
+
+    .severity-minor {
+      background: rgba(234, 179, 8, 0.2);
+      color: #eab308;
+      border: 1px solid #eab308;
+    }
+
+    /* ── Agent Grid ────────────────────────────────────────────────────── */
     .agent-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 16px;
-      margin-top: 16px;
+      gap: 5mm;
+      margin: 5mm 0;
     }
+
     .agent-card {
-      background: rgba(30,41,59,0.6);
+      background: rgba(30, 41, 59, 0.6);
       border: 1px solid #334155;
       border-radius: 8px;
-      padding: 16px;
+      padding: 5mm;
     }
+
     .agent-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 10px;
+      margin-bottom: 4mm;
     }
-    .agent-title  { font-size: 14px; font-weight: 600; color: #cbd5e1; }
-    .agent-detail { font-size: 12px; color: #94a3b8; margin-top: 3px; }
-    .status-indicator { padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
-    .status-online  { background:rgba(34,197,94,0.2); color:#22c55e; }
-    .status-offline { background:rgba(239,68,68,0.2); color:#ef4444; }
 
-    /* ── CIS sections ────────────────────────────────────────────────────── */
+    .agent-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #cbd5e1;
+    }
+
+    .agent-detail {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-top: 2mm;
+    }
+
+    .status-indicator {
+      padding: 1mm 3mm;
+      border-radius: 12px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    .status-online {
+      background: rgba(34, 197, 94, 0.2);
+      color: #22c55e;
+    }
+
+    .status-offline {
+      background: rgba(239, 68, 68, 0.2);
+      color: #ef4444;
+    }
+
+    /* ── CIS Sections ──────────────────────────────────────────────────── */
     .cis-section {
-      background: rgba(30,41,59,0.6);
+      background: rgba(30, 41, 59, 0.6);
       border: 1px solid #334155;
       border-radius: 8px;
-      padding: 18px;
-      margin-bottom: 16px;
+      padding: 6mm;
+      margin-bottom: 5mm;
     }
+
     .cis-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 12px;
+      margin-bottom: 4mm;
     }
-    .cis-title { font-size: 15px; font-weight: 600; color: #3b82f6; }
-    .compliance-score { font-size: 24px; font-weight: 700; color: #22c55e; }
+
+    .cis-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #3b82f6;
+    }
+
+    .compliance-score {
+      font-size: 24px;
+      font-weight: 700;
+      color: #22c55e;
+    }
+
     .cis-item {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 10px 0;
+      padding: 3mm 0;
       border-bottom: 1px solid #334155;
     }
-    .cis-item:last-child { border-bottom: none; }
 
-    /* ── Progress bar ────────────────────────────────────────────────────── */
-    .progress-bar {
-      width: 100%; height: 10px;
-      background: rgba(15,23,42,0.8);
-      border-radius: 5px;
-      overflow: hidden;
-      margin: 8px 0;
+    .cis-item:last-child {
+      border-bottom: none;
     }
+
+    /* ── Progress Bar ──────────────────────────────────────────────────── */
+    .progress-bar {
+      width: 100%;
+      height: 4mm;
+      background: rgba(15, 23, 42, 0.8);
+      border-radius: 2mm;
+      overflow: hidden;
+      margin: 3mm 0;
+    }
+
     .progress-fill {
       height: 100%;
       background: linear-gradient(90deg, #3b82f6 0%, #22c55e 100%);
     }
 
-    /* ── Summary sections ────────────────────────────────────────────────── */
+    /* ── Summary Sections ──────────────────────────────────────────────── */
     .summary-section {
-      background: rgba(30,41,59,0.6);
+      background: rgba(30, 41, 59, 0.6);
       border: 1px solid #334155;
       border-radius: 8px;
-      padding: 18px;
-      margin-bottom: 16px;
+      padding: 6mm;
+      margin-bottom: 5mm;
     }
+
     .summary-section-title {
       font-size: 16px;
       font-weight: 600;
       color: #3b82f6;
-      margin-bottom: 12px;
+      margin-bottom: 4mm;
     }
+
     .summary-text {
       color: #cbd5e1;
-      line-height: 1.8;
-      font-size: 13px;
-      margin-bottom: 12px;
+      line-height: 1.6;
+      font-size: 12px;
+      margin-bottom: 3mm;
     }
+
     .recommendation-item {
-      padding: 9px 0 9px 22px;
+      padding: 2mm 0 2mm 6mm;
       position: relative;
       color: #cbd5e1;
-      font-size: 13px;
-      line-height: 1.6;
+      font-size: 12px;
+      line-height: 1.5;
       border-bottom: 1px solid #1e293b;
     }
-    .recommendation-item:last-child { border-bottom: none; }
+
+    .recommendation-item:last-child {
+      border-bottom: none;
+    }
+
     .recommendation-item::before {
       content: "▸";
       position: absolute;
@@ -508,52 +583,59 @@ export function generateHtmlReport(clientName, organisationName, statistics, rep
       font-weight: bold;
     }
 
-    /* ── Cover elements ──────────────────────────────────────────────────── */
-    .logo        { font-size: 44px; font-weight: bold; color: #3b82f6; margin-bottom: 50px; }
-    .logo span   { color: #60a5fa; }
-    .report-title    { font-size: 36px; font-weight: 700; color: #e4e7eb; margin-bottom: 14px; }
-    .report-subtitle { font-size: 20px; color: #94a3b8; margin-bottom: 60px; }
+    /* ── Cover Elements ─────────────────────────────────────────────────── */
+    .logo {
+      font-size: 48px;
+      font-weight: bold;
+      color: #3b82f6;
+      margin-bottom: 15mm;
+    }
+
+    .logo span {
+      color: #60a5fa;
+    }
+
+    .report-title {
+      font-size: 36px;
+      font-weight: 700;
+      color: #e4e7eb;
+      margin-bottom: 5mm;
+    }
+
+    .report-subtitle {
+      font-size: 20px;
+      color: #94a3b8;
+      margin-bottom: 15mm;
+    }
+
     .client-info {
-      background: rgba(30,41,59,0.6);
-      padding: 32px 52px;
+      background: rgba(30, 41, 59, 0.6);
+      padding: 10mm 15mm;
       border-radius: 12px;
       border: 1px solid #334155;
-      margin-bottom: 50px;
+      margin-bottom: 15mm;
     }
-    .client-name   { font-size: 26px; font-weight: 600; color: #3b82f6; margin-bottom: 10px; }
-    .report-period { font-size: 15px; color: #94a3b8; margin-top: 40px; }
 
-    /* ── Print fidelity ──────────────────────────────────────────────────── */
-    @media print {
-      * {
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
-        color-adjust: exact !important;
-      }
-      html, body { background: #0f172a !important; }
+    .client-name {
+      font-size: 28px;
+      font-weight: 600;
+      color: #3b82f6;
+      margin-bottom: 3mm;
     }
+
+    .report-period {
+      font-size: 14px;
+      color: #94a3b8;
+      margin-top: 10mm;
+    }
+
+    /* ── Utility Classes ────────────────────────────────────────────────── */
+    .text-center { text-align: center; }
+    .mt-4 { margin-top: 4mm; }
+    .mb-4 { margin-bottom: 4mm; }
   </style>
 </head>
 <body>
-
-<!-- ═══════════════════════════════════════════════════════════ -->
-<!-- RUNNING HEADER — fixed, repeats on every physical page      -->
-<!-- ═══════════════════════════════════════════════════════════ -->
-<div class="running-header">
-  <span class="brand">CODEC<span>NET</span></span>
-  <span>${organisationName} — SOC Security Report</span>
-  <span>Generated: ${generationDate}</span>
-</div>
-
-<!-- ═══════════════════════════════════════════════════════════ -->
-<!-- RUNNING FOOTER — fixed, repeats on every physical page      -->
-<!-- ═══════════════════════════════════════════════════════════ -->
-<div class="running-footer">
-  <span>Codec Networks SOC &nbsp;|&nbsp; ${frequency.charAt(0).toUpperCase() + frequency.slice(1)} Report</span>
-  <span style="font-weight:600;color:#475569;letter-spacing:0.08em;">CONFIDENTIAL</span>
-  <span>&copy; ${now.getFullYear()} Codec Networks</span>
-</div>
-
 
 <!-- ═══════════════════════════════════════════════════════════ -->
 <!-- PAGE 1 — Cover                                             -->
@@ -566,14 +648,13 @@ export function generateHtmlReport(clientName, organisationName, statistics, rep
 
     <div class="client-info">
       <div class="client-name">${organisationName}</div>
-      <div style="margin-top:10px;font-size:15px;color:#94a3b8;">${template}</div>
+      <div style="margin-top:3mm; font-size:14px; color:#94a3b8;">${template.charAt(0).toUpperCase() + template.slice(1)} Template</div>
     </div>
 
     <div class="report-period">Report Period: ${periodStr}</div>
-    <div style="margin-top:16px;font-size:12px;color:#475569;">Generated: ${generationDate}</div>
+    <div style="margin-top:4mm; font-size:11px; color:#475569;">Generated: ${generationDate}</div>
   </div>
 </div>
-
 
 <!-- ═══════════════════════════════════════════════════════════ -->
 <!-- PAGE 2 — Top 10 Security Alerts                            -->
@@ -601,30 +682,29 @@ export function generateHtmlReport(clientName, organisationName, statistics, rep
   </div>
 </div>
 
-
 <!-- ═══════════════════════════════════════════════════════════ -->
 <!-- PAGE 3 — Alert Statistics & Trends                         -->
 <!-- ═══════════════════════════════════════════════════════════ -->
 <div class="page">
   <div class="page-content">
     <div class="section-header">
-      <h2 class="section-title">Alert Statistics &amp; Trends</h2>
+      <h2 class="section-title">Alert Statistics & Trends</h2>
       <span class="section-meta">${periodStr}</span>
     </div>
 
     <div class="chart-row">
       <div class="chart-box">
         <h3 class="chart-title">Alert Distribution</h3>
-        ${generateStatCard('Critical',     severityCounts.critical || 0)}
-        ${generateStatCard('Major',        severityCounts.major    || 0)}
-        ${generateStatCard('Minor',        severityCounts.minor    || 0)}
-        ${generateStatCard('Total Alerts', severityCounts.total    || 0)}
+        ${generateStatCard('Critical', severityCounts.critical || 0)}
+        ${generateStatCard('Major', severityCounts.major || 0)}
+        ${generateStatCard('Minor', severityCounts.minor || 0)}
+        ${generateStatCard('Total Alerts', severityCounts.total || 0)}
       </div>
       <div class="chart-box">
         <h3 class="chart-title">Alert Severity Breakdown</h3>
-        <div style="padding:14px 0;">
+        <div style="padding:3mm 0;">
           ${severityChartHtml}
-          <div style="margin-top:14px;font-size:12px;color:#94a3b8;">
+          <div style="margin-top:4mm; font-size:11px; color:#94a3b8;">
             Critical: ${severityPct.critical || 0}% &nbsp;|&nbsp;
             Major: ${severityPct.major || 0}% &nbsp;|&nbsp;
             Minor: ${severityPct.minor || 0}%
@@ -649,7 +729,6 @@ export function generateHtmlReport(clientName, organisationName, statistics, rep
   </div>
 </div>
 
-
 <!-- ═══════════════════════════════════════════════════════════ -->
 <!-- PAGE 4 — Agent Status Overview                             -->
 <!-- ═══════════════════════════════════════════════════════════ -->
@@ -663,10 +742,10 @@ export function generateHtmlReport(clientName, organisationName, statistics, rep
     <div class="chart-row">
       <div class="chart-box">
         <h3 class="chart-title">Agent Summary</h3>
-        ${generateStatCard('Total Agents',    agentSummary.total_agents        || 0)}
-        ${generateStatCard('Active',          agentSummary.active_agents       || 0)}
-        ${generateStatCard('Disconnected',    agentSummary.disconnected_agents || 0)}
-        ${generateStatCard('Never Connected', agentSummary.never_connected     || 0)}
+        ${generateStatCard('Total Agents', agentSummary.total_agents || 0)}
+        ${generateStatCard('Active', agentSummary.active_agents || 0)}
+        ${generateStatCard('Disconnected', agentSummary.disconnected_agents || 0)}
+        ${generateStatCard('Never Connected', agentSummary.never_connected || 0)}
       </div>
       <div class="chart-box">
         <h3 class="chart-title">Agent Health Status</h3>
@@ -675,14 +754,13 @@ export function generateHtmlReport(clientName, organisationName, statistics, rep
     </div>
 
     ${agentsCardsHtml ? `
-    <h3 class="chart-title" style="margin:18px 0 12px;">Agent Details</h3>
+    <h3 class="chart-title" style="margin:6mm 0 4mm;">Agent Details</h3>
     <div class="agent-grid">${agentsCardsHtml}</div>` : `
-    <div class="chart-box" style="margin-top:16px;">
+    <div class="chart-box" style="margin-top:5mm;">
       <span class="stat-label">No agent details available</span>
     </div>`}
   </div>
 </div>
-
 
 <!-- ═══════════════════════════════════════════════════════════ -->
 <!-- PAGE 5 — CIS Compliance Status                             -->
@@ -705,30 +783,29 @@ export function generateHtmlReport(clientName, organisationName, statistics, rep
     </div>
 
     <div class="cis-section">
-      <h3 class="cis-title" style="margin-bottom:12px;">Configuration Findings Summary</h3>
+      <h3 class="cis-title" style="margin-bottom:4mm;">Configuration Findings Summary</h3>
       ${generateStatCard('Total Checks', cisData.total_checks || 0)}
       <div class="stat-card">
         <span class="stat-label">Passed</span>
-        <span class="stat-value" style="font-size:20px;color:#22c55e;">${cisData.total_passed || 0}</span>
+        <span class="stat-value" style="font-size:18px; color:#22c55e;">${cisData.total_passed || 0}</span>
       </div>
       <div class="stat-card">
         <span class="stat-label">Failed</span>
-        <span class="stat-value" style="font-size:20px;color:#ef4444;">${cisData.total_failed || 0}</span>
+        <span class="stat-value" style="font-size:18px; color:#ef4444;">${cisData.total_failed || 0}</span>
       </div>
     </div>
 
     <div class="cis-section">
-      <h3 class="cis-title" style="margin-bottom:12px;">Security Configuration Assessment — Per Policy</h3>
+      <h3 class="cis-title" style="margin-bottom:4mm;">Security Configuration Assessment — Per Policy</h3>
       ${cisItemsHtml}
     </div>
 
     <div class="cis-section">
-      <h3 class="cis-title" style="margin-bottom:12px;">Agent Compliance Scores</h3>
+      <h3 class="cis-title" style="margin-bottom:4mm;">Agent Compliance Scores</h3>
       ${agentsCisHtml}
     </div>
   </div>
 </div>
-
 
 <!-- ═══════════════════════════════════════════════════════════ -->
 <!-- PAGE 6 — Executive Summary                                 -->
@@ -784,7 +861,7 @@ export function generateHtmlReport(clientName, organisationName, statistics, rep
         persistent misconfigurations or active threat campaigns.
       </div>
       <div class="recommendation-item">
-        Ensure all agents are running the latest Wazuh version to benefit from the most recent
+        Ensure all agents are running the latest version to benefit from the most recent
         detection rules and security patches.
       </div>
     </div>
