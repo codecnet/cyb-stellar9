@@ -298,15 +298,15 @@ const generateReport = asyncHandler(async (req, res) => {
         },
         top_alerts: {
           terms: {
-            field: 'rule.description.keyword',
+            field: 'rule.description',
             size: 10,
             order: { _count: 'desc' }
           },
           aggs: {
             max_level: { max: { field: 'rule.level' } },
-            unique_hosts: { cardinality: { field: 'agent.name.keyword' } },
+            unique_hosts: { cardinality: { field: 'agent.name' } },
             last_seen: { max: { field: '@timestamp' } },
-            sample_host: { terms: { field: 'agent.name.keyword', size: 1 } }
+            sample_host: { terms: { field: 'agent.name', size: 1 } }
           }
         },
         alert_types: {

@@ -79,7 +79,9 @@ export function generateHtmlReport(clientName, organisationName, statistics, rep
     const agentsList = statistics.agents_list || [];
     const cisData = statistics.cis_compliance || {};
 
-    const periodStr = `${reportPeriod.start_date || 'N/A'} — ${reportPeriod.end_date || 'N/A'}`;
+    const periodStr = reportPeriod.end_date
+        ? `${reportPeriod.start_date || 'N/A'} — ${reportPeriod.end_date}`
+        : (reportPeriod.start_date || 'N/A');
     const now = new Date();
     const generationDate = now.toLocaleDateString('en-US', {
         year: 'numeric', month: 'long', day: 'numeric',
