@@ -235,15 +235,12 @@ const generateReport = asyncHandler(async (req, res) => {
     const authString = `${INDEXER_USER}:${INDEXER_PASS}`;
     const authEncoded = Buffer.from(authString).toString("base64");
 
-    // Calculate time range - use custom dates if provided, otherwise default to last 7 days
-    let startDate, endDate;
-    if (start_date && end_date) {
+    // Calculate time range - use custom dates if provided, otherwise "All Time" (no date filter)
+    let startDate = null, endDate = null;
+    const hasDateFilter = !!(start_date && end_date);
+    if (hasDateFilter) {
       startDate = new Date(start_date);
       endDate = new Date(end_date);
-    } else {
-      // Default to last 7 days if no dates provided
-      endDate = new Date();
-      startDate = new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000);
     }
 
     console.log(`\n========== GENERATING REPORT ==========`);
@@ -251,7 +248,7 @@ const generateReport = asyncHandler(async (req, res) => {
     console.log(`Organization ID: ${organizationId}`);
     console.log(`Client Name: ${clientName}`);
     console.log(`Frequency: ${frequency}`);
-    console.log(`Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
+    console.log(`Date range: ${hasDateFilter ? `${startDate.toISOString()} to ${endDate.toISOString()}` : 'All Time'}`);
     console.log(`Wazuh Host: ${WAZUH_HOST}`);
     console.log(`Indexer Host: ${INDEXER_HOST}`);
     console.log(`=======================================\n`);
@@ -260,25 +257,20 @@ const generateReport = asyncHandler(async (req, res) => {
     const token = await getWazuhToken(WAZUH_HOST, WAZUH_USER, WAZUH_PASS);
 
     // Fetch alert statistics from Wazuh Indexer using aggregations (fast — single request)
-    const alertBaseQuery = {
-      bool: {
-        must: [
-          {
-            range: {
-              '@timestamp': {
-                gte: startDate.toISOString(),
-                lte: endDate.toISOString()
-              }
-            }
-          },
-          {
-            range: {
-              'rule.level': { gte: 8 }
-            }
+    const mustClauses = [
+      { range: { 'rule.level': { gte: 8 } } }
+    ];
+    if (hasDateFilter) {
+      mustClauses.unshift({
+        range: {
+          '@timestamp': {
+            gte: startDate.toISOString(),
+            lte: endDate.toISOString()
           }
-        ]
-      }
-    };
+        }
+      });
+    }
+    const alertBaseQuery = { bool: { must: mustClauses } };
 
     const statsQuery = {
       size: 10,
@@ -478,8 +470,8 @@ const generateReport = asyncHandler(async (req, res) => {
       agents_list: agentsData.agents,
       cis_compliance: scaData,
       report_period: {
-        start_date: formatDate(startDate, true),
-        end_date: formatDate(endDate, true)
+        start_date: hasDateFilter ? formatDate(startDate, true) : 'All Time',
+        end_date: hasDateFilter ? formatDate(endDate, true) : null
       }
     };
 
@@ -515,10 +507,10 @@ const generateReport = asyncHandler(async (req, res) => {
     console.log('PDF generated successfully');
 
     // Generate time range string for filename
-    const formatDateForFilename = (date) => {
-      return date.toISOString().split('T')[0]; // YYYY-MM-DD
-    };
-    const timeRangeStr = `${formatDateForFilename(startDate)}_to_${formatDateForFilename(endDate)}`;
+    const formatDateForFilename = (date) => date.toISOString().split('T')[0];
+    const timeRangeStr = hasDateFilter
+      ? `${formatDateForFilename(startDate)}_to_${formatDateForFilename(endDate)}`
+      : 'all_time';
 
     // Generate filename in format: <orgName>_<reportType>_<timeRange>.pdf
     // SECURITY FIX: Sanitize all path components to prevent path traversal
