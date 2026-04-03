@@ -1,8 +1,10 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useClient } from '@/contexts/ClientContext'
 import { wazuhApi } from '@/lib/api'
+import { subscribeToDataChanges } from '@/lib/alertsStream'
 import {
   ComputerDesktopIcon,
   ArrowPathIcon,
@@ -287,56 +289,55 @@ function AgentTrendModal({
 
   const formatNumber = (num: number) => new Intl.NumberFormat().format(num)
 
-  // Calculate stats
   const trendData = agent.trend || []
   const counts = trendData.map(d => d.count)
   const avgCount = counts.length > 0 ? Math.round(counts.reduce((a, b) => a + b, 0) / counts.length) : 0
   const maxCount = counts.length > 0 ? Math.max(...counts) : 0
   const minCount = counts.length > 0 ? Math.min(...counts) : 0
 
-  // Trend direction
   const firstHalf = counts.slice(0, Math.floor(counts.length / 2))
   const secondHalf = counts.slice(Math.floor(counts.length / 2))
   const firstAvg = firstHalf.reduce((a, b) => a + b, 0) / (firstHalf.length || 1)
   const secondAvg = secondHalf.reduce((a, b) => a + b, 0) / (secondHalf.length || 1)
   const trendPercent = firstAvg > 0 ? Math.round(((secondAvg - firstAvg) / firstAvg) * 100) : 0
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       />
 
       {/* Modal */}
-      <div className="flex min-h-full items-center justify-center p-4">
-        <div className="relative w-full max-w-3xl bg-white dark:bg-gray-800 rounded-2xl shadow-xl transform transition-all">
-          {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                <ComputerDesktopIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {agent.agent_name || 'Unknown Agent'}
-                </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  ID: {agent.agent_id} • IP: {agent.agent_ip}
-                </p>
-              </div>
+      <div className="relative z-10 w-full max-w-3xl bg-white dark:bg-gray-800 rounded-2xl shadow-xl flex flex-col max-h-[90vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+              <ComputerDesktopIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {agent.agent_name || 'Unknown Agent'}
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                ID: {agent.agent_id} • IP: {agent.agent_ip}
+              </p>
+            </div>
           </div>
+          <button
+            onClick={onClose}
+            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
 
+        {/* Scrollable body */}
+        <div className="overflow-y-auto flex-1">
           {/* Stats Cards */}
           <div className="grid grid-cols-4 gap-4 p-6 border-b border-gray-200 dark:border-gray-700">
             <div className="text-center">
@@ -367,19 +368,20 @@ function AgentTrendModal({
             <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">Event Volume Over Time</h4>
             <DetailedChart data={agent.trend || []} agent={agent} />
           </div>
+        </div>
 
-          {/* Footer */}
-          <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 rounded-b-2xl">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            >
-              Close
-            </button>
-          </div>
+        {/* Footer */}
+        <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 rounded-b-2xl flex-shrink-0">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          >
+            Close
+          </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -396,6 +398,8 @@ export default function EventsByAgentPage() {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [selectedAgent, setSelectedAgent] = useState<AgentEventData | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [tablePage, setTablePage] = useState(1)
+  const TABLE_PAGE_SIZE = 10
 
   // Time range filters
   const [timeRangeType, setTimeRangeType] = useState<'relative' | 'absolute'>(() => {
@@ -498,6 +502,11 @@ export default function EventsByAgentPage() {
     fetchData()
   }, [selectedClient, timeRangeType, relativeHours, fromDate, toDate])
 
+  // SSE: re-fetch immediately when backend detects alert data changed
+  useEffect(() => {
+    return subscribeToDataChanges(selectedClient?.id ?? null, fetchData)
+  }, [selectedClient?.id])
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
@@ -537,6 +546,15 @@ export default function EventsByAgentPage() {
 
     return filtered
   }, [data, searchTerm, sortField, sortOrder])
+
+  // Reset to page 1 whenever filter/sort changes
+  React.useEffect(() => { setTablePage(1) }, [searchTerm, sortField, sortOrder])
+
+  const totalTablePages = Math.ceil(filteredAndSortedAgents.length / TABLE_PAGE_SIZE)
+  const pagedAgents = filteredAndSortedAgents.slice(
+    (tablePage - 1) * TABLE_PAGE_SIZE,
+    tablePage * TABLE_PAGE_SIZE
+  )
 
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) return null
@@ -622,14 +640,14 @@ export default function EventsByAgentPage() {
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         {/* Search */}
-        <div className="relative flex-1">
-          <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+        <div className="relative flex-1 flex items-center bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 px-3 py-3">
+          <MagnifyingGlassIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
           <input
             type="text"
             placeholder="Search by agent name, ID, or IP..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="flex-1 ml-2 bg-transparent text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none"
           />
         </div>
 
@@ -762,14 +780,14 @@ export default function EventsByAgentPage() {
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {filteredAndSortedAgents.length === 0 ? (
+                {pagedAgents.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
                       {searchTerm ? 'No agents match your search' : 'No agents found'}
                     </td>
                   </tr>
                 ) : (
-                  filteredAndSortedAgents.map((agent) => (
+                  pagedAgents.map((agent) => (
                     <tr key={agent.agent_id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
@@ -824,12 +842,58 @@ export default function EventsByAgentPage() {
               </tbody>
             </table>
           </div>
-          {/* Footer */}
-          <div className="px-6 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Showing {filteredAndSortedAgents.length} of {data.total_agents} agents
-            </p>
-          </div>
+          {/* Footer / Pagination */}
+          {totalTablePages > 1 && (() => {
+            // Build page number list with ellipsis: always show first, last, current ±2
+            const pages: (number | '...')[] = []
+            for (let i = 1; i <= totalTablePages; i++) {
+              if (i === 1 || i === totalTablePages || (i >= tablePage - 2 && i <= tablePage + 2)) {
+                pages.push(i)
+              } else if (pages[pages.length - 1] !== '...') {
+                pages.push('...')
+              }
+            }
+            const btnBase = 'min-w-[36px] h-9 px-2 text-sm font-medium rounded-lg border transition-colors'
+            const btnActive = 'bg-blue-600 border-blue-600 text-white'
+            const btnIdle = 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700'
+            const btnDisabled = 'opacity-40 cursor-not-allowed'
+            return (
+              <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Showing {filteredAndSortedAgents.length === 0 ? 0 : (tablePage - 1) * TABLE_PAGE_SIZE + 1}–{Math.min(tablePage * TABLE_PAGE_SIZE, filteredAndSortedAgents.length)} of {filteredAndSortedAgents.length} agents
+                </p>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setTablePage(p => Math.max(1, p - 1))}
+                    disabled={tablePage === 1}
+                    className={`${btnBase} px-3 ${tablePage === 1 ? btnDisabled + ' ' + btnIdle : btnIdle}`}
+                  >
+                    Previous
+                  </button>
+                  {pages.map((p, i) =>
+                    p === '...' ? (
+                      <span key={`ellipsis-${i}`} className="min-w-[36px] h-9 flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">…</span>
+                    ) : (
+                      <button
+                        key={p}
+                        onClick={() => setTablePage(p)}
+                        className={`${btnBase} ${p === tablePage ? btnActive : btnIdle}`}
+                      >
+                        {p}
+                      </button>
+                    )
+                  )}
+                  <button
+                    onClick={() => setTablePage(p => Math.min(totalTablePages, p + 1))}
+                    disabled={tablePage === totalTablePages}
+                    className={`${btnBase} px-3 ${tablePage === totalTablePages ? btnDisabled + ' ' + btnIdle : btnIdle}`}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )
+          })()}
         </div>
       )}
 

@@ -395,8 +395,10 @@ const getComplianceFramework = asyncHandler(async (req, res) => {
         
         try {
           const complianceFieldResponse = await axiosInstance.post(
-            `${INDEXER_HOST}/wazuh-alerts-*/_search`,
+            `${INDEXER_HOST}/wazuh-alerts*/_search`,
             {
+              size: 0,
+              track_total_hits: true,
               query: {
                 bool: {
                   must: [
@@ -409,11 +411,10 @@ const getComplianceFramework = asyncHandler(async (req, res) => {
                 compliance_requirements: {
                   terms: {
                     field: `rule.${framework}`,
-                    size: 65536  // Maximum Elasticsearch allows - effectively unlimited
+                    size: 65536
                   }
                 }
-              },
-              size: 0
+              }
             },
             {
               headers: { 'Content-Type': 'application/json' },
@@ -439,8 +440,10 @@ const getComplianceFramework = asyncHandler(async (req, res) => {
         
         try {
           const ruleBasedResponse = await axiosInstance.post(
-            `${INDEXER_HOST}/wazuh-alerts-*/_search`,
+            `${INDEXER_HOST}/wazuh-alerts*/_search`,
             {
+              size: 0,
+              track_total_hits: true,
               query: {
                 bool: {
                   must: [
@@ -453,11 +456,10 @@ const getComplianceFramework = asyncHandler(async (req, res) => {
                 rule_alerts: {
                   terms: {
                     field: "rule.id",
-                    size: 65536  // Maximum Elasticsearch allows - effectively unlimited
+                    size: 65536
                   }
                 }
-              },
-              size: 0
+              }
             },
             {
               headers: { 'Content-Type': 'application/json' },
@@ -781,6 +783,7 @@ const handleISO27001Compliance = asyncHandler(async (req, res) => {
       try {
         const esQuery = {
           size: 0,
+          track_total_hits: true,
           query: {
             bool: {
               must: [
@@ -801,7 +804,7 @@ const handleISO27001Compliance = asyncHandler(async (req, res) => {
 
         const auth = Buffer.from(`${INDEXER_USER}:${INDEXER_PASS}`).toString('base64');
         const esResponse = await axiosInstance.post(
-          `${INDEXER_HOST}/wazuh-alerts-*/_search`,
+          `${INDEXER_HOST}/wazuh-alerts*/_search`,
           esQuery,
           {
             headers: {

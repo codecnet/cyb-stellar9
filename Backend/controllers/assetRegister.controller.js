@@ -450,6 +450,114 @@ export const syncAgentsToAssets = async (req, res) => {
   }
 };
 
+// Lightweight Wazuh status refresh — only updates wazuh_agent_status / ip_address / last_keepalive
+// for assets that already have a wazuh_agent_id. Does NOT create new assets.
+// Manually added assets without a wazuh_agent_id are completely untouched.
+export const refreshWazuhStatus = async (req, res) => {
+  try {
+    const { organisation_id } = req.body;
+
+    if (!organisation_id) {
+      return res.status(400).json({ success: false, message: 'Organisation ID is required' });
+    }
+
+    const organisation = await Organisation.findById(organisation_id)
+      .select('+wazuh_manager_username +wazuh_manager_password');
+
+    if (!organisation) {
+      return res.status(404).json({ success: false, message: 'Organisation not found' });
+    }
+
+    if (!organisation.wazuh_manager_ip || !organisation.wazuh_manager_username || !organisation.wazuh_manager_password) {
+      return res.status(404).json({ success: false, message: 'Wazuh credentials not configured' });
+    }
+
+    const host = `https://${organisation.wazuh_manager_ip}:${organisation.wazuh_manager_port || 55000}`;
+    const username = organisation.wazuh_manager_username;
+
+    let password;
+    if (typeof organisation.wazuh_manager_password === 'object' && organisation.wazuh_manager_password.encrypted) {
+      password = EncryptionUtils.decrypt(organisation.wazuh_manager_password);
+    } else {
+      password = organisation.wazuh_manager_password;
+    }
+
+    const auth = Buffer.from(`${username}:${password}`).toString('base64');
+
+    const tokenResponse = await axiosInstance.post(
+      `${host}/security/user/authenticate`,
+      {},
+      { headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' } }
+    );
+
+    const wazuhToken = tokenResponse.data?.data?.token;
+    if (!wazuhToken) {
+      return res.status(500).json({ success: false, message: 'Failed to authenticate with Wazuh' });
+    }
+
+    // Fetch only basic agent list (fast — no hardware/OS data)
+    const agentsResponse = await axiosInstance.get(`${host}/agents`, {
+      headers: { Authorization: `Bearer ${wazuhToken}`, 'Content-Type': 'application/json' },
+      params: { limit: 10000 }
+    });
+
+    const agents = agentsResponse.data?.data?.affected_items || [];
+
+    // Build a quick lookup map: agentId → { status, ip, lastKeepAlive }
+    const agentMap = {};
+    for (const agent of agents) {
+      if (agent.id === '000') continue; // skip manager
+      agentMap[agent.id] = {
+        status: agent.status === 'active' ? 'active'
+               : agent.status === 'disconnected' ? 'disconnected'
+               : agent.status === 'never_connected' ? 'never_connected'
+               : 'pending',
+        ip_address: agent.ip || null,
+        last_keepalive: agent.lastKeepAlive ? new Date(agent.lastKeepAlive) : null
+      };
+    }
+
+    // Find all assets for this org that have a wazuh_agent_id
+    const linkedAssets = await AssetRegister.find({
+      organisation_id,
+      wazuh_agent_id: { $exists: true, $ne: null, $ne: '' },
+      is_deleted: false
+    }).select('_id wazuh_agent_id wazuh_agent_status ip_address last_keepalive');
+
+    let updated = 0;
+    let unchanged = 0;
+
+    for (const asset of linkedAssets) {
+      const live = agentMap[asset.wazuh_agent_id];
+      if (!live) continue; // agent no longer in Wazuh — leave as-is
+
+      if (
+        asset.wazuh_agent_status !== live.status ||
+        asset.ip_address !== live.ip_address
+      ) {
+        await AssetRegister.findByIdAndUpdate(asset._id, {
+          wazuh_agent_status: live.status,
+          ip_address: live.ip_address,
+          last_keepalive: live.last_keepalive,
+          updated_by: req.user?._id
+        });
+        updated++;
+      } else {
+        unchanged++;
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Wazuh status refresh completed',
+      data: { updated, unchanged, total_linked: linkedAssets.length }
+    });
+  } catch (error) {
+    console.error('Error refreshing Wazuh status:', error);
+    res.status(500).json({ success: false, message: 'Error refreshing Wazuh status', error: error.message });
+  }
+};
+
 // Get asset statistics
 export const getAssetStatistics = async (req, res) => {
   try {

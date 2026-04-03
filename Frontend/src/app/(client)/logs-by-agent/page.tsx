@@ -1,8 +1,10 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useClient } from '@/contexts/ClientContext'
 import { wazuhApi } from '@/lib/api'
+import { subscribeToDataChanges } from '@/lib/alertsStream'
 import {
   ComputerDesktopIcon,
   ArrowPathIcon,
@@ -78,8 +80,8 @@ function SparklineChart({ data, width = 120, height = 32 }: { data: TrendPoint[]
   const isIncreasing = secondAvg > firstAvg * 1.1
   const isDecreasing = secondAvg < firstAvg * 0.9
 
-  const strokeColor = isIncreasing ? '#ef4444' : isDecreasing ? '#22c55e' : '#a855f7'
-  const fillColor = isIncreasing ? '#ef444420' : isDecreasing ? '#22c55e20' : '#a855f720'
+  const strokeColor = isIncreasing ? '#ef4444' : isDecreasing ? '#22c55e' : '#3b82f6'
+  const fillColor = isIncreasing ? '#ef444420' : isDecreasing ? '#22c55e20' : '#3b82f620'
 
   return (
     <svg width={width} height={height} className="overflow-visible">
@@ -158,7 +160,7 @@ function DetailedChart({ data, agent }: { data: TrendPoint[], agent: AgentLogDat
   const secondAvg = secondHalf.reduce((a, b) => a + b, 0) / (secondHalf.length || 1)
   const isIncreasing = secondAvg > firstAvg * 1.1
   const isDecreasing = secondAvg < firstAvg * 0.9
-  const strokeColor = isIncreasing ? '#ef4444' : isDecreasing ? '#22c55e' : '#a855f7'
+  const strokeColor = isIncreasing ? '#ef4444' : isDecreasing ? '#22c55e' : '#3b82f6'
 
   // Y-axis labels
   const yLabels = [0, 0.25, 0.5, 0.75, 1].map(ratio => ({
@@ -298,22 +300,21 @@ function AgentTrendModal({
   const secondAvg = secondHalf.reduce((a, b) => a + b, 0) / (secondHalf.length || 1)
   const trendPercent = firstAvg > 0 ? Math.round(((secondAvg - firstAvg) / firstAvg) * 100) : 0
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm"
         onClick={onClose}
       />
 
       {/* Modal */}
-      <div className="flex min-h-full items-center justify-center p-4">
-        <div className="relative w-full max-w-3xl bg-white dark:bg-gray-800 rounded-2xl shadow-xl transform transition-all">
+      <div className="relative z-10 w-full max-w-3xl bg-white dark:bg-gray-800 rounded-2xl shadow-xl flex flex-col max-h-[90vh]">
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-                <ComputerDesktopIcon className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <ComputerDesktopIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -334,6 +335,8 @@ function AgentTrendModal({
             </button>
           </div>
 
+        {/* Scrollable body */}
+        <div className="overflow-y-auto flex-1">
           {/* Stats Cards */}
           <div className="grid grid-cols-4 gap-4 p-6 border-b border-gray-200 dark:border-gray-700">
             <div className="text-center">
@@ -351,7 +354,7 @@ function AgentTrendModal({
             <div className="text-center">
               <p className={clsx(
                 'text-2xl font-bold',
-                trendPercent > 10 ? 'text-red-600' : trendPercent < -10 ? 'text-green-600' : 'text-purple-600'
+                trendPercent > 10 ? 'text-red-600' : trendPercent < -10 ? 'text-green-600' : 'text-blue-600'
               )}>
                 {trendPercent > 0 ? '+' : ''}{trendPercent}%
               </p>
@@ -365,18 +368,20 @@ function AgentTrendModal({
             <DetailedChart data={agent.trend || []} agent={agent} />
           </div>
 
-          {/* Footer */}
-          <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 rounded-b-2xl">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-            >
-              Close
-            </button>
-          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 rounded-b-2xl flex-shrink-0">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+          >
+            Close
+          </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -393,6 +398,8 @@ export default function LogsByAgentPage() {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [selectedAgent, setSelectedAgent] = useState<AgentLogData | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [tablePage, setTablePage] = useState(1)
+  const TABLE_PAGE_SIZE = 10
 
   // Time range filters
   const [timeRangeType, setTimeRangeType] = useState<'relative' | 'absolute'>(() => {
@@ -491,6 +498,11 @@ export default function LogsByAgentPage() {
     fetchData()
   }, [selectedClient, timeRangeType, relativeHours, fromDate, toDate])
 
+  // SSE: re-fetch immediately when backend detects alert data changed
+  useEffect(() => {
+    return subscribeToDataChanges(selectedClient?.id ?? null, fetchData)
+  }, [selectedClient?.id])
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
@@ -531,6 +543,14 @@ export default function LogsByAgentPage() {
     return filtered
   }, [data, searchTerm, sortField, sortOrder])
 
+  React.useEffect(() => { setTablePage(1) }, [searchTerm, sortField, sortOrder])
+
+  const totalTablePages = Math.ceil(filteredAndSortedAgents.length / TABLE_PAGE_SIZE)
+  const pagedAgents = filteredAndSortedAgents.slice(
+    (tablePage - 1) * TABLE_PAGE_SIZE,
+    tablePage * TABLE_PAGE_SIZE
+  )
+
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) return null
     return sortOrder === 'asc' ? (
@@ -562,7 +582,7 @@ export default function LogsByAgentPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <DocumentTextIcon className="h-7 w-7 text-purple-500" />
+            <DocumentTextIcon className="h-7 w-7 text-blue-500" />
             Log Source Coverage
           </h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
@@ -572,7 +592,7 @@ export default function LogsByAgentPage() {
         <button
           onClick={fetchData}
           disabled={loading}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
         >
           <ArrowPathIcon className={clsx('h-5 w-5', loading && 'animate-spin')} />
           Refresh
@@ -597,8 +617,8 @@ export default function LogsByAgentPage() {
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-                <DocumentTextIcon className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+              <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <DocumentTextIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Total Logs</p>
@@ -614,14 +634,14 @@ export default function LogsByAgentPage() {
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         {/* Search */}
-        <div className="relative flex-1">
-          <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+        <div className="relative flex-1 flex items-center bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 px-3 py-3">
+          <MagnifyingGlassIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
           <input
             type="text"
             placeholder="Search by agent name, ID, or IP..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="flex-1 ml-2 bg-transparent text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none"
           />
         </div>
 
@@ -638,7 +658,7 @@ export default function LogsByAgentPage() {
               onClick={() => setTimeRangeType('relative')}
               className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                 timeRangeType === 'relative'
-                  ? 'bg-purple-600 text-white'
+                  ? 'bg-blue-600 text-white'
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
               }`}
             >
@@ -648,7 +668,7 @@ export default function LogsByAgentPage() {
               onClick={() => setTimeRangeType('absolute')}
               className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                 timeRangeType === 'absolute'
-                  ? 'bg-purple-600 text-white'
+                  ? 'bg-blue-600 text-white'
                   : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
               }`}
             >
@@ -661,7 +681,7 @@ export default function LogsByAgentPage() {
             <select
               value={relativeHours}
               onChange={(e) => setRelativeHours(parseInt(e.target.value))}
-              className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500"
+              className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
             >
               <option value={0}>All Time</option>
               <option value={1}>Last Hour</option>
@@ -682,7 +702,7 @@ export default function LogsByAgentPage() {
                   type="datetime-local"
                   value={fromDate}
                   onChange={(e) => setFromDate(e.target.value)}
-                  className="px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500"
+                  className="px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div className="flex items-center space-x-2">
@@ -691,7 +711,7 @@ export default function LogsByAgentPage() {
                   type="datetime-local"
                   value={toDate}
                   onChange={(e) => setToDate(e.target.value)}
-                  className="px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-purple-500"
+                  className="px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </>
@@ -709,7 +729,7 @@ export default function LogsByAgentPage() {
       {/* Loading State */}
       {loading && (
         <div className="flex items-center justify-center py-12">
-          <ArrowPathIcon className="h-8 w-8 text-purple-500 animate-spin" />
+          <ArrowPathIcon className="h-8 w-8 text-blue-500 animate-spin" />
           <span className="ml-2 text-gray-600 dark:text-gray-400">Loading logs data...</span>
         </div>
       )}
@@ -754,14 +774,14 @@ export default function LogsByAgentPage() {
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {filteredAndSortedAgents.length === 0 ? (
+                {pagedAgents.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
                       {searchTerm ? 'No agents match your search' : 'No agents found'}
                     </td>
                   </tr>
                 ) : (
-                  filteredAndSortedAgents.map((agent) => (
+                  pagedAgents.map((agent) => (
                     <tr key={agent.agent_id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
@@ -816,12 +836,57 @@ export default function LogsByAgentPage() {
               </tbody>
             </table>
           </div>
-          {/* Footer */}
-          <div className="px-6 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Showing {filteredAndSortedAgents.length} of {data.total_agents} agents
-            </p>
-          </div>
+          {/* Footer / Pagination */}
+          {totalTablePages > 1 && (() => {
+            const pages: (number | '...')[] = []
+            for (let i = 1; i <= totalTablePages; i++) {
+              if (i === 1 || i === totalTablePages || (i >= tablePage - 2 && i <= tablePage + 2)) {
+                pages.push(i)
+              } else if (pages[pages.length - 1] !== '...') {
+                pages.push('...')
+              }
+            }
+            const btnBase = 'min-w-[36px] h-9 px-2 text-sm font-medium rounded-lg border transition-colors'
+            const btnActive = 'bg-blue-600 border-blue-600 text-white'
+            const btnIdle = 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700'
+            const btnDisabled = 'opacity-40 cursor-not-allowed'
+            return (
+              <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Showing {filteredAndSortedAgents.length === 0 ? 0 : (tablePage - 1) * TABLE_PAGE_SIZE + 1}–{Math.min(tablePage * TABLE_PAGE_SIZE, filteredAndSortedAgents.length)} of {filteredAndSortedAgents.length} agents
+                </p>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setTablePage(p => Math.max(1, p - 1))}
+                    disabled={tablePage === 1}
+                    className={`${btnBase} px-3 ${tablePage === 1 ? btnDisabled + ' ' + btnIdle : btnIdle}`}
+                  >
+                    Previous
+                  </button>
+                  {pages.map((p, i) =>
+                    p === '...' ? (
+                      <span key={`ellipsis-${i}`} className="min-w-[36px] h-9 flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">…</span>
+                    ) : (
+                      <button
+                        key={p}
+                        onClick={() => setTablePage(p)}
+                        className={`${btnBase} ${p === tablePage ? btnActive : btnIdle}`}
+                      >
+                        {p}
+                      </button>
+                    )
+                  )}
+                  <button
+                    onClick={() => setTablePage(p => Math.min(totalTablePages, p + 1))}
+                    disabled={tablePage === totalTablePages}
+                    className={`${btnBase} px-3 ${tablePage === totalTablePages ? btnDisabled + ' ' + btnIdle : btnIdle}`}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )
+          })()}
         </div>
       )}
 

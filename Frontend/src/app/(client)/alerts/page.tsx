@@ -57,6 +57,7 @@ export default function AlertsPage() {
   const [fetchProgress, setFetchProgress] = useState({ current: 0, total: 0 })
   const [isFetchingBatches, setIsFetchingBatches] = useState(false)
   const isFetchingRef = useRef(false)  // Prevent concurrent fetches
+  const fetchAbortRef = useRef<AbortController | null>(null)  // Cancel in-progress batch fetch
   const [cacheStatus, setCacheStatus] = useState<{ cached: boolean; timestamp: string | null }>({
     cached: false,
     timestamp: null
@@ -102,11 +103,11 @@ export default function AlertsPage() {
 
   // Fetch alerts with batch loading and progressive display
   const fetchAlerts = async () => {
-    // Prevent concurrent fetches
-    if (isFetchingRef.current) {
-      console.log('[!] Fetch already in progress, skipping duplicate request');
-      return;
-    }
+    // Cancel any in-progress fetch, then start fresh
+    fetchAbortRef.current?.abort();
+    const abortCtrl = new AbortController();
+    fetchAbortRef.current = abortCtrl;
+    isFetchingRef.current = false; // reset so new fetch proceeds
 
     try {
       isFetchingRef.current = true;
@@ -133,9 +134,8 @@ export default function AlertsPage() {
       // Step 1: Fetch total count first
       const countUrl = `${BASE_URL}/wazuh/alerts/count?${baseParams.toString()}`;
       const countRes = await fetch(countUrl, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
+        signal: abortCtrl.signal,
       });
 
       if (!countRes.ok) {
@@ -174,6 +174,12 @@ export default function AlertsPage() {
       let searchAfter: any = null;  // Track search_after cursor for deep pagination
 
       for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        // Stop immediately if a newer fetch was triggered
+        if (abortCtrl.signal.aborted) {
+          console.log('[!] Fetch aborted — filter changed, stopping old batches');
+          return;
+        }
+
         const batchParams = new URLSearchParams(baseParams);
         batchParams.append('limit', batchSize.toString());
 
@@ -187,9 +193,8 @@ export default function AlertsPage() {
         console.log(`[i] Fetching batch ${batchIndex + 1}/${totalBatches} (search_after: ${searchAfter ? 'cursor set' : 'first batch'})`);
 
         const batchRes = await fetch(batchUrl, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
+          headers: { 'Authorization': `Bearer ${token}` },
+          signal: abortCtrl.signal,
         });
 
         if (!batchRes.ok) {
@@ -242,12 +247,15 @@ export default function AlertsPage() {
 
       console.log(`[✓] All batches loaded: ${allAlerts.length} alerts`);
 
-    } catch (err) {
-      console.error('[✗] Error fetching alerts:', err);
+    } catch (err: any) {
+      if (err.name !== 'AbortError') console.error('[✗] Error fetching alerts:', err);
     } finally {
-      isFetchingRef.current = false;
-      setIsFetchingBatches(false);
-      setFetchProgress({ current: 0, total: 0 });
+      // Only reset state if this is still the active fetch (not superseded by a newer one)
+      if (!abortCtrl.signal.aborted) {
+        isFetchingRef.current = false;
+        setIsFetchingBatches(false);
+        setFetchProgress({ current: 0, total: 0 });
+      }
     }
   }
 

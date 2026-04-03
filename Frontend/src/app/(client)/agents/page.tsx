@@ -6,6 +6,7 @@ import { useClient } from '@/contexts/ClientContext'
 import { usePermissions } from '@/hooks/usePermissions'
 import Cookies from 'js-cookie';
 import { wazuhApi } from '@/lib/api';
+import { subscribeToDataChanges } from '@/lib/alertsStream';
 const BASE_URL = process.env.NEXT_PUBLIC_RBAC_BASE_IP
 import {
   ArrowDownTrayIcon,
@@ -149,6 +150,16 @@ const getResultColor = (result: string) => {
   }
 }
 
+const getAgentCriticality = (agent: Agent): string => {
+  const totalChecks = (agent.pass || 0) + (agent.fail || 0) + (agent.invalid || 0)
+  if (totalChecks === 0) return 'unknown'
+  const score = agent.score || 0
+  if (score >= 80) return 'low'
+  if (score >= 60) return 'medium'
+  if (score >= 40) return 'high'
+  return 'critical'
+}
+
 export default function AgentsPage() {
   const { hasPermission } = usePermissions()
   const [agents, setAgents] = useState<Agent[]>(mockAgents)
@@ -175,11 +186,17 @@ export default function AgentsPage() {
   const [expandedCisCheck, setExpandedCisCheck] = useState<string | null>(null);
   const [cisCurrentPage, setCisCurrentPage] = useState(1);
   const [vulnCurrentPage, setVulnCurrentPage] = useState(1);
+  const [cisCriticalityFilter, setCisCriticalityFilter] = useState('all');
+  const [vulnSearchTerm, setVulnSearchTerm] = useState('')
+  const [vulnSeverityFilter, setVulnSeverityFilter] = useState('all')
   const itemsPerPage = 10;
   const [cacheStatus, setCacheStatus] = useState<{ cached: boolean; timestamp: string | null }>({
     cached: false,
     timestamp: null
   });
+  const [searchTerm, setSearchTerm] = useState('')
+  const [filterStatus, setFilterStatus] = useState('all')
+  const [filterCriticality, setFilterCriticality] = useState('all')
 
   // Check if user has quarantine permissions
   const canQuarantineAgents = hasPermission('agents', 'quarantine') || hasPermission('agents', 'manage');
@@ -356,6 +373,12 @@ export default function AgentsPage() {
     setSelectedAgent(agent)
     setShowAgentModal(true)
     setActiveTab('dashboard')
+    setCisSearchTerm('')
+    setCisCriticalityFilter('all')
+    setCisCurrentPage(1)
+    setVulnSearchTerm('')
+    setVulnSeverityFilter('all')
+    setVulnCurrentPage(1)
   }
 
   const closeAgentModal = () => {
@@ -363,6 +386,11 @@ export default function AgentsPage() {
     setSelectedAgent(null)
     setActiveTab('dashboard')
     setCisSearchTerm('')
+    setCisCriticalityFilter('all')
+    setCisCurrentPage(1)
+    setVulnSearchTerm('')
+    setVulnSeverityFilter('all')
+    setVulnCurrentPage(1)
   }
 
   // CIS Benchmark calculations
@@ -386,11 +414,32 @@ export default function AgentsPage() {
 
   // Filter functions
   const filteredCisChecks =
-    activeTab === 'cis' && selectedAgent && Array.isArray(selectedAgent.cis_checks)
-      ? selectedAgent.cis_checks.filter((check: any) =>
-        (check.title?.toLowerCase() || '').includes(cisSearchTerm.toLowerCase()) ||
-        (String(check.id) || '').toLowerCase().includes(cisSearchTerm.toLowerCase())
-      )
+    selectedAgent && Array.isArray(selectedAgent.cis_checks)
+      ? selectedAgent.cis_checks.filter((check: any) => {
+          const term = cisSearchTerm.toLowerCase()
+          const matchesSearch = !cisSearchTerm ||
+            (check.title?.toLowerCase() || '').includes(term) ||
+            (String(check.id) || '').toLowerCase().includes(term) ||
+            (check.description?.toLowerCase() || '').includes(term) ||
+            (check.result?.toLowerCase() || '').includes(term)
+          const matchesCriticality = cisCriticalityFilter === 'all' ||
+            (check.severity?.toLowerCase() || '') === cisCriticalityFilter
+          return matchesSearch && matchesCriticality
+        })
+      : []
+
+  const filteredVulns =
+    selectedAgent && Array.isArray(selectedAgent.vulnerabilities)
+      ? selectedAgent.vulnerabilities.filter((v: any) => {
+          const term = vulnSearchTerm.toLowerCase()
+          const matchesSearch = !vulnSearchTerm ||
+            (v.id?.toLowerCase() || '').includes(term) ||
+            (v.name?.toLowerCase() || '').includes(term) ||
+            (v.description?.toLowerCase() || '').includes(term)
+          const matchesSeverity = vulnSeverityFilter === 'all' ||
+            (v.severity?.toLowerCase() || '') === vulnSeverityFilter
+          return matchesSearch && matchesSeverity
+        })
       : []
 
   // Fetch quarantine states for all agents
@@ -977,6 +1026,28 @@ export default function AgentsPage() {
     fetchAgents();
   }, [selectedClient?.id, isClientMode]); // Re-fetch when selected client changes
 
+  // SSE: re-fetch immediately when backend detects data changed
+  useEffect(() => {
+    const orgId = isClientMode && selectedClient?.id ? selectedClient.id : (selectedClient?.id ?? null);
+    return subscribeToDataChanges(orgId, fetchAgents);
+  }, [selectedClient?.id, isClientMode]);
+
+  const agentsList = Array.isArray(agents) ? agents : []
+  const filteredAgents = agentsList.filter(agent => {
+    const matchesSearch = !searchTerm ||
+      agent.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      agent.ipAddress.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      agent.operatingSystem.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesStatus = filterStatus === 'all' || agent.status === filterStatus
+    const matchesCriticality = filterCriticality === 'all' || getAgentCriticality(agent) === filterCriticality
+    return matchesSearch && matchesStatus && matchesCriticality
+  })
+
+  const totalAgents = agentsList.length
+  const activeAgents = agentsList.filter(a => a.status === 'active').length
+  const criticalAgents = agentsList.filter(a => getAgentCriticality(a) === 'critical').length
+  const disconnectedAgents = agentsList.filter(a => a.status === 'disconnected').length
+
   // if (loading) return <div>Loading agent data...</div>;
   if (fetchError) {
     return (
@@ -1067,11 +1138,102 @@ export default function AgentsPage() {
         </button> */}
       </div>
 
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">Total Agents</p>
+              <p className="text-3xl font-bold mt-1 text-gray-900 dark:text-white">{totalAgents}</p>
+            </div>
+            <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
+              <ServerIcon className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+            </div>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">Active Agents</p>
+              <p className="text-3xl font-bold mt-1 text-gray-900 dark:text-white">{activeAgents}</p>
+            </div>
+            <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-xl">
+              <CheckCircleIcon className="w-8 h-8 text-green-600 dark:text-green-400" />
+            </div>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">Critical</p>
+              <p className="text-3xl font-bold mt-1 text-gray-900 dark:text-white">{criticalAgents}</p>
+            </div>
+            <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-xl">
+              <ExclamationTriangleIcon className="w-8 h-8 text-red-600 dark:text-red-400" />
+            </div>
+          </div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">Disconnected</p>
+              <p className="text-3xl font-bold mt-1 text-gray-900 dark:text-white">{disconnectedAgents}</p>
+            </div>
+            <div className="p-3 bg-gray-100 dark:bg-gray-700/50 rounded-xl">
+              <XCircleIcon className="w-8 h-8 text-gray-600 dark:text-gray-400" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Search */}
+          <div className="lg:col-span-2">
+            <div className="relative">
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search agents by name, IP, or OS..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:text-white"
+              />
+            </div>
+          </div>
+          {/* Status Filter */}
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="px-4 py-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:text-white"
+          >
+            <option value="all">All Status</option>
+            <option value="active">Active</option>
+            <option value="disconnected">Disconnected</option>
+            <option value="warning">Warning</option>
+            <option value="quarantined">Quarantined</option>
+          </select>
+          {/* Criticality Filter */}
+          <select
+            value={filterCriticality}
+            onChange={(e) => setFilterCriticality(e.target.value)}
+            className="px-4 py-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:text-white"
+          >
+            <option value="all">All Criticality</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+            <option value="unknown">Unknown</option>
+          </select>
+        </div>
+      </div>
+
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Security Agents ({agents.length})
-          </h3>
+            Security Agents ({filteredAgents.length}{filteredAgents.length !== totalAgents ? ` of ${totalAgents}` : ''})</h3>
           <div className="text-sm text-gray-500 dark:text-gray-400">
             Last updated: {isClient ? lastRefresh.toLocaleTimeString() : ''}
           </div>
@@ -1106,7 +1268,7 @@ export default function AgentsPage() {
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-              {(Array.isArray(agents) ? agents : []).map((agent) => (
+              {filteredAgents.map((agent) => (
                 <tr
                   key={agent.id}
                   className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
@@ -1547,19 +1709,35 @@ export default function AgentsPage() {
                           </div>
                         </div>
 
-                        {/* CIS Search */}
-                        <div className="relative">
-                          <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-                          <input
-                            type="text"
-                            placeholder="Filter requirements"
-                            value={cisSearchTerm}
+                        {/* CIS Search & Filter */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="md:col-span-2 relative">
+                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                            <input
+                              type="text"
+                              placeholder="Search by title, ID, description or result..."
+                              value={cisSearchTerm}
+                              onChange={(e) => {
+                                setCisSearchTerm(e.target.value);
+                                setCisCurrentPage(1);
+                              }}
+                              className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:text-white transition-colors"
+                            />
+                          </div>
+                          <select
+                            value={cisCriticalityFilter}
                             onChange={(e) => {
-                              setCisSearchTerm(e.target.value);
-                              setCisCurrentPage(1); // Reset to first page on search
+                              setCisCriticalityFilter(e.target.value);
+                              setCisCurrentPage(1);
                             }}
-                            className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:text-white transition-colors"
-                          />
+                            className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:text-white transition-colors"
+                          >
+                            <option value="all">All Criticality</option>
+                            <option value="critical">Critical</option>
+                            <option value="high">High</option>
+                            <option value="medium">Medium</option>
+                            <option value="low">Low</option>
+                          </select>
                         </div>
 
                         {/* CIS Checks - Expandable List */}
@@ -2024,6 +2202,37 @@ export default function AgentsPage() {
                           </div>
                         </div>
 
+                        {/* Vuln Search & Filter */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="md:col-span-2 relative">
+                            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                            <input
+                              type="text"
+                              placeholder="Search by CVE ID, package name or description..."
+                              value={vulnSearchTerm}
+                              onChange={(e) => {
+                                setVulnSearchTerm(e.target.value);
+                                setVulnCurrentPage(1);
+                              }}
+                              className="w-full pl-10 pr-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:text-white transition-colors"
+                            />
+                          </div>
+                          <select
+                            value={vulnSeverityFilter}
+                            onChange={(e) => {
+                              setVulnSeverityFilter(e.target.value);
+                              setVulnCurrentPage(1);
+                            }}
+                            className="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:text-white transition-colors"
+                          >
+                            <option value="all">All Criticality</option>
+                            <option value="critical">Critical</option>
+                            <option value="high">High</option>
+                            <option value="medium">Medium</option>
+                            <option value="low">Low</option>
+                          </select>
+                        </div>
+
                         {/* Detailed Vulnerability Timeline */}
                         <div className="bg-white dark:bg-gray-800 border border-gray-200/50 dark:border-gray-700/50 rounded-xl p-6 shadow-sm">
                           <div className="flex items-center justify-between mb-4">
@@ -2031,11 +2240,11 @@ export default function AgentsPage() {
                               Vulnerability Timeline
                             </h4>
                             <span className="text-sm text-gray-500 dark:text-gray-400">
-                              Showing {Math.min((vulnCurrentPage - 1) * itemsPerPage + 1, vulns.length)} - {Math.min(vulnCurrentPage * itemsPerPage, vulns.length)} of {vulns.length}
+                              Showing {Math.min((vulnCurrentPage - 1) * itemsPerPage + 1, filteredVulns.length)} - {Math.min(vulnCurrentPage * itemsPerPage, filteredVulns.length)} of {filteredVulns.length}{filteredVulns.length !== vulns.length ? ` of ${vulns.length} total` : ''}
                             </span>
                           </div>
                           <div className="space-y-3">
-                            {vulns
+                            {filteredVulns
                               .slice((vulnCurrentPage - 1) * itemsPerPage, vulnCurrentPage * itemsPerPage)
                               .map((vuln: any, index: number) => {
                               const isExpanded = expandedVulnerability === `${vuln.id}-${index}`;
@@ -2165,15 +2374,17 @@ export default function AgentsPage() {
                                 </div>
                               );
                             })}
-                            {vulns.length === 0 && (
+                            {filteredVulns.length === 0 && (
                               <div className="text-center text-gray-500 dark:text-gray-400 py-8">
-                                No vulnerabilities found for this agent.
+                                {vulnSearchTerm || vulnSeverityFilter !== 'all'
+                                  ? 'No vulnerabilities match your filters.'
+                                  : 'No vulnerabilities found for this agent.'}
                               </div>
                             )}
                           </div>
 
                           {/* Pagination */}
-                          {vulns.length > itemsPerPage && (
+                          {filteredVulns.length > itemsPerPage && (
                             <div className="flex items-center justify-center space-x-2 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
                               {/* First Page Button */}
                               <button
@@ -2206,15 +2417,15 @@ export default function AgentsPage() {
 
                               {/* Page Info */}
                               <span className="px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300">
-                                Page <strong>{vulnCurrentPage}</strong> of <strong>{Math.ceil(vulns.length / itemsPerPage)}</strong>
+                                Page <strong>{vulnCurrentPage}</strong> of <strong>{Math.ceil(filteredVulns.length / itemsPerPage)}</strong>
                               </span>
 
                               {/* Next Page Button */}
                               <button
-                                onClick={() => setVulnCurrentPage(Math.min(Math.ceil(vulns.length / itemsPerPage), vulnCurrentPage + 1))}
-                                disabled={vulnCurrentPage >= Math.ceil(vulns.length / itemsPerPage)}
+                                onClick={() => setVulnCurrentPage(Math.min(Math.ceil(filteredVulns.length / itemsPerPage), vulnCurrentPage + 1))}
+                                disabled={vulnCurrentPage >= Math.ceil(filteredVulns.length / itemsPerPage)}
                                 className={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors duration-150 ${
-                                  vulnCurrentPage >= Math.ceil(vulns.length / itemsPerPage)
+                                  vulnCurrentPage >= Math.ceil(filteredVulns.length / itemsPerPage)
                                     ? 'text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700/50 cursor-not-allowed'
                                     : 'text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/50'
                                 }`}
@@ -2226,10 +2437,10 @@ export default function AgentsPage() {
 
                               {/* Last Page Button */}
                               <button
-                                onClick={() => setVulnCurrentPage(Math.ceil(vulns.length / itemsPerPage))}
-                                disabled={vulnCurrentPage >= Math.ceil(vulns.length / itemsPerPage)}
+                                onClick={() => setVulnCurrentPage(Math.ceil(filteredVulns.length / itemsPerPage))}
+                                disabled={vulnCurrentPage >= Math.ceil(filteredVulns.length / itemsPerPage)}
                                 className={`inline-flex items-center px-2 py-1.5 text-sm font-medium rounded-lg border transition-colors duration-150 ${
-                                  vulnCurrentPage >= Math.ceil(vulns.length / itemsPerPage)
+                                  vulnCurrentPage >= Math.ceil(filteredVulns.length / itemsPerPage)
                                     ? 'text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700/50 cursor-not-allowed'
                                     : 'text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/50'
                                 }`}

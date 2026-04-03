@@ -3,6 +3,7 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import redisClient from '../config/redisClient.js';
+import { registerSseClient, unregisterSseClient } from '../services/alertsPoller.service.js';
 
 const CACHE_TTL = 900; // 15 minutes in seconds
 
@@ -112,8 +113,7 @@ const getAlertsCount = asyncHandler(async (req, res) => {
     // Set cache
     try {
       await redisClient.set(cacheKey, JSON.stringify(responseData), {
-        EX: CACHE_TTL,
-        NX: true
+        EX: CACHE_TTL
       });
       console.log('💾 [ALERTS COUNT] Data cached in Redis for 15 minutes');
     } catch (cacheError) {
@@ -296,8 +296,7 @@ const getAlerts = asyncHandler(async (req, res) => {
     // Set cache
     try {
       await redisClient.set(cacheKey, JSON.stringify(alertsData), {
-        EX: CACHE_TTL,
-        NX: true
+        EX: CACHE_TTL
       });
       console.log('💾 [ALERTS] Data cached in Redis for 15 minutes');
       console.log('   Total alerts cached:', alertsData.alerts.length);
@@ -395,8 +394,7 @@ const getTotalEventsCount = asyncHandler(async (req, res) => {
     // Set cache
     try {
       await redisClient.set(cacheKey, JSON.stringify(responseData), {
-        EX: CACHE_TTL,
-        NX: true
+        EX: CACHE_TTL
       });
       console.log('💾 [TOTAL EVENTS COUNT] Data cached in Redis for 15 minutes');
     } catch (cacheError) {
@@ -493,8 +491,7 @@ const getTotalLogsCount = asyncHandler(async (req, res) => {
     // Set cache
     try {
       await redisClient.set(cacheKey, JSON.stringify(responseData), {
-        EX: CACHE_TTL,
-        NX: true
+        EX: CACHE_TTL
       });
       console.log('💾 [TOTAL LOGS COUNT] Data cached in Redis for 15 minutes');
     } catch (cacheError) {
@@ -678,8 +675,7 @@ const getEventsCountByAgent = asyncHandler(async (req, res) => {
     // Set cache
     try {
       await redisClient.set(cacheKey, JSON.stringify(responseData), {
-        EX: CACHE_TTL,
-        NX: true
+        EX: CACHE_TTL
       });
       console.log('💾 [EVENTS BY AGENT] Data cached in Redis for 15 minutes');
     } catch (cacheError) {
@@ -845,8 +841,7 @@ const getLogsCountByAgent = asyncHandler(async (req, res) => {
     // Set cache
     try {
       await redisClient.set(cacheKey, JSON.stringify(responseData), {
-        EX: CACHE_TTL,
-        NX: true
+        EX: CACHE_TTL
       });
       console.log('💾 [LOGS BY AGENT] Data cached in Redis for 15 minutes');
     } catch (cacheError) {
@@ -1385,8 +1380,7 @@ const getTopRiskEntities = asyncHandler(async (req, res) => {
     // Set cache
     try {
       await redisClient.set(cacheKey, JSON.stringify(responseData), {
-        EX: CACHE_TTL,
-        NX: true
+        EX: CACHE_TTL
       });
       console.log('💾 [TOP RISK ENTITIES] Data cached in Redis for 15 minutes');
     } catch (cacheError) {
@@ -1402,9 +1396,52 @@ const getTopRiskEntities = asyncHandler(async (req, res) => {
   }
 });
 
+// SSE endpoint — persistent connection, frontend subscribes for change notifications
+const getAlertsStream = (req, res) => {
+  const orgId = req.clientCreds?.organizationId;
+  const indexerCreds = req.clientCreds?.indexerCredentials;
+
+  if (!orgId || !indexerCreds) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.write(`data: ${JSON.stringify({ type: 'error', message: 'Missing credentials' })}\n\n`);
+    res.end();
+    return;
+  }
+
+  // SSE headers — keep connection open
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // disable nginx buffering
+  res.flushHeaders();
+
+  // Confirm connection to client
+  res.write(`data: ${JSON.stringify({ type: 'connected', orgId })}\n\n`);
+
+  // Register with background poller
+  registerSseClient(orgId, res, indexerCreds);
+
+  // Heartbeat every 25s to prevent proxy/nginx from closing idle connection
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(`data: ${JSON.stringify({ type: 'heartbeat' })}\n\n`);
+    } catch {
+      clearInterval(heartbeat);
+    }
+  }, 25000);
+
+  // Cleanup when client disconnects
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    unregisterSseClient(orgId, res);
+    console.log(`[SSE] Client disconnected for org ${orgId}`);
+  });
+};
+
 export {
   getAlerts,
   getAlertsCount,
+  getAlertsStream,
   getTotalEventsCount,
   getTotalLogsCount,
   getEventsCountByAgent,

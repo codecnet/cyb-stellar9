@@ -1,6 +1,6 @@
 import express from 'express';
 import { getAgentsBasic, getAgentsSummary, getAgentsStream, quarantineAgent, getQuarantineStatus } from '../controllers/agents.controller.js';
-import { getAlerts, getAlertsCount, getTotalEventsCount, getTotalLogsCount, getEventsCountByAgent, getLogsCountByAgent, getAgentEvents, getAgentLogs, getTopRiskEntities } from '../controllers/alerts.controller.js';
+import { getAlerts, getAlertsCount, getAlertsStream, getTotalEventsCount, getTotalLogsCount, getEventsCountByAgent, getLogsCountByAgent, getAgentEvents, getAgentLogs, getTopRiskEntities } from '../controllers/alerts.controller.js';
 import { getDashboardMetrics } from '../controllers/dashboardMetrics.controller.js';
 import { getCompliance, getComplianceFramework } from '../controllers/compliance.controller.js';
 import {
@@ -37,7 +37,8 @@ router.put("/agent/quarantine", quarantineAgent);
 router.get("/agent/:agentId/quarantine-status", getQuarantineStatus);
 
 // Alerts routes
-router.get("/alerts/count", getAlertsCount);  // Count endpoint (must be before /alerts route)
+router.get("/alerts/stream", getAlertsStream);           // SSE stream — push notification when alert data changes
+router.get("/alerts/count", getAlertsCount);             // Count endpoint (must be before /alerts route)
 router.get("/alerts/total-count", getTotalEventsCount);  // Total events count (all events, no severity filter)
 router.get("/alerts/count-by-agent", getEventsCountByAgent);  // Events count grouped by agent/machine
 router.get("/alerts/top-risk-entities", getTopRiskEntities);  // Top 5 risk entities (hosts, users, processes) by critical alerts

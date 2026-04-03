@@ -4,6 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import Cookies from 'js-cookie';
 import { wazuhApi } from '@/lib/api';
+import { subscribeToDataChanges } from '@/lib/alertsStream';
 const BASE_URL = process.env.NEXT_PUBLIC_RBAC_BASE_IP
 
 // Types
@@ -496,13 +497,13 @@ const fetchOTXThreatData = async (): Promise<{ threats: ThreatData[], arcs: ArcD
 // Provider component
 interface ThreatDataProviderProps {
   children: ReactNode;
-  refreshInterval?: number; // in milliseconds, default 30 seconds
+  refreshInterval?: number; // in milliseconds, default 10 minutes (SSE handles real-time updates)
   orgId?: string; // Organization ID for client-specific data
 }
 
 export const ThreatDataProvider: React.FC<ThreatDataProviderProps> = ({
   children,
-  refreshInterval = 30000,
+  refreshInterval = 600000, // 10-minute fallback; SSE pushes changes immediately
   orgId
 }) => {
   const [attacks, setAttacks] = useState<AttackData[]>([]);
@@ -656,6 +657,13 @@ export const ThreatDataProvider: React.FC<ThreatDataProviderProps> = ({
       }
     };
   }, [refreshInterval, orgId]); // Re-fetch when orgId changes
+
+  // SSE: re-fetch immediately when backend detects alert data changed
+  useEffect(() => {
+    return subscribeToDataChanges(orgId ?? null, () => {
+      if (mountedRef.current) fetchAllData(false, true); // forceRefresh=true to bypass local cache
+    });
+  }, [orgId]);
 
   // Handle visibility change (pause/resume when tab is not visible)
   useEffect(() => {

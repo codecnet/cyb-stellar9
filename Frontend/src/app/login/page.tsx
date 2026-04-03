@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { isAuthenticated, setAuthSession } from '@/lib/auth'
+import { ShieldExclamationIcon } from '@heroicons/react/24/outline'
 
 const BASE_URL = process.env.NEXT_PUBLIC_RBAC_BASE_IP || 'http://localhost:5000/api' // SIEM-dev backend URL
 import {
@@ -16,11 +17,17 @@ import {
 
 export default function LoginPage() {
   const router = useRouter()
+  const [sessionMessage, setSessionMessage] = useState('')
+
   useEffect(() => {
     if (isAuthenticated()) {
-      // Already logged in, redirect away from login page
-      router.replace('/') // Let root page handle routing based on permissions
+      router.replace('/')
+      return
     }
+    // Read ?reason= from URL and display as session-expired banner
+    const params = new URLSearchParams(window.location.search)
+    const reason = params.get('reason')
+    if (reason) setSessionMessage(decodeURIComponent(reason))
   }, [router])
 
   const [username, setUsername] = useState('')
@@ -137,6 +144,14 @@ export default function LoginPage() {
                 Please sign in to access your dashboard
               </p> */}
             </div>
+
+            {/* Session expired banner */}
+            {sessionMessage && (
+              <div className="flex items-start space-x-3 text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-6 backdrop-blur-sm animate-fade-in">
+                <ShieldExclamationIcon className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                <span className="text-sm font-medium">{sessionMessage}</span>
+              </div>
+            )}
 
             {/* Form */}
             <form onSubmit={handleLogin} className="space-y-6">

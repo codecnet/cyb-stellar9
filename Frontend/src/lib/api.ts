@@ -54,14 +54,13 @@ const apiRequest = async (url: string, options: RequestInit = {}) => {
     // PATCH 55: Handle session expiry - 401 Unauthorized
     // When session expires or is invalid, clear auth and redirect to login
     if (response.status === 401) {
-      console.log('🔒 [SESSION EXPIRED] 401 Unauthorized - Session expired or invalid');
+      const errorData = await response.json().catch(() => ({}));
+      const message = errorData.message || 'Session has expired or been revoked';
       clearAuthSession();
       if (typeof window !== 'undefined') {
-        console.log('🔄 [SESSION EXPIRED] Redirecting to login page...');
-        window.location.href = '/login';
+        window.location.href = `/login?reason=${encodeURIComponent(message)}`;
       }
-      const errorData = await response.json().catch(() => ({ message: 'Session expired' }));
-      throw new Error(errorData.message || 'Session expired. Please login again.');
+      throw new Error(message);
     }
 
     if (!response.ok) {

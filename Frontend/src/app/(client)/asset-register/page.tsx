@@ -206,7 +206,6 @@ export default function AssetRegisterPage() {
   useEffect(() => {
     if (selectedClient) {
       fetchAssets()
-      // Auto-sync assets from Wazuh on initial load
       syncAgents()
     }
   }, [selectedClient])

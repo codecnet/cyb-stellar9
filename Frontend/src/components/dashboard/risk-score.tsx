@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { wazuhApi } from '@/lib/api';
 import { useClient } from '@/contexts/ClientContext';
 import { ClockIcon } from '@heroicons/react/24/outline';
+import { subscribeToDataChanges } from '@/lib/alertsStream';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -282,12 +283,16 @@ export function RiskScore({ className = '' }: RiskScoreProps) {
     }
   }, [selectedClient?.id, isClientMode]);
 
+  // Initial fetch + re-fetch when fetchData reference changes (client/org switch)
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 60000); // Refresh every minute
-
-    return () => clearInterval(interval);
   }, [fetchData]);
+
+  // SSE: re-fetch when backend detects data changed (replaces 60s polling)
+  useEffect(() => {
+    const orgId = isClientMode && selectedClient?.id ? selectedClient.id : null;
+    return subscribeToDataChanges(orgId, fetchData);
+  }, [selectedClient?.id, isClientMode]);
 
   const { score, factors } = metrics
     ? computeRiskScore(metrics)

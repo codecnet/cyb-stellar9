@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useClient } from '@/contexts/ClientContext'
 import Cookies from 'js-cookie'
+import { subscribeToDataChanges } from '@/lib/alertsStream'
 import {
   ScatterChart,
   Scatter,
@@ -128,6 +129,13 @@ export function RiskMatrix3D() {
       fetchRiskMatrix()
     }
   }, [selectedClient, timePeriod])
+
+  // SSE: re-fetch immediately when backend detects alert data changed
+  useEffect(() => {
+    return subscribeToDataChanges(selectedClient?.id ?? null, () => {
+      if (selectedClient) fetchRiskMatrix()
+    })
+  }, [selectedClient?.id])
 
   if (!selectedClient) {
     return (
