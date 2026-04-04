@@ -6,8 +6,10 @@ import puppeteer from 'puppeteer';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { generateHtmlReport } from '../templates/reportTemplate.html.js';
+import { generateHtmlReport, generateSocEfficacyReport } from '../templates/reportTemplate.html.js';
 import Report from '../models/report.model.js';
+import SocEfficacy from '../models/socEfficacy.model.js';
+import { calculateFinalScore, calculateIntegrationCounts } from '../utils/socEfficacyScoring.util.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -214,10 +216,158 @@ async function fetchSCAData(wazuhHost, token) {
   }
 }
 
+// Generate SOC Efficacy Report Handler
+async function generateSocEfficacyReportHandler(req, res, params) {
+  const { reportName, frequency, description, start_date, end_date, organizationId, organisationName, userId, socEfficacyData } = params;
+
+  console.log(`\n========== GENERATING SOC EFFICACY REPORT ==========`);
+  console.log(`Organization: ${organisationName}`);
+  console.log(`Organization ID: ${organizationId}`);
+  console.log(`Report Name: ${reportName}`);
+  console.log(`=========================================\n`);
+
+  let socData;
+
+  // If SOC efficacy data is provided in the request, save it first
+  if (socEfficacyData) {
+    console.log('Saving SOC efficacy data before generating report...');
+
+    // Auto-calculate integration counts from assets
+    const integrationCounts = calculateIntegrationCounts(socEfficacyData.table29_assets || {});
+
+    // Update to_be_integrated values
+    const updatedIntegration = { ...socEfficacyData.table30_integration };
+    for (const tech in integrationCounts) {
+      if (updatedIntegration[tech]) {
+        updatedIntegration[tech].to_be_integrated = integrationCounts[tech];
+      }
+    }
+
+    const dataToSave = {
+      ...socEfficacyData,
+      table30_integration: updatedIntegration
+    };
+
+    // Save to database
+    socData = await SocEfficacy.upsertByOrganisation(organizationId, dataToSave, userId);
+    console.log('SOC efficacy data saved successfully');
+  } else {
+    // Fetch existing SOC efficacy data for the organization
+    socData = await SocEfficacy.findByOrganisation(organizationId);
+
+    if (!socData) {
+      throw new ApiError(404, 'No SOC efficacy data found for this organization. Please enter SOC efficacy data first.');
+    }
+  }
+
+  // Calculate scores
+  const scoreData = calculateFinalScore(socData.toObject());
+
+  // Prepare report period
+  const reportPeriod = {
+    start: start_date ? new Date(start_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A',
+    end: end_date ? new Date(end_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'
+  };
+
+  // Generate HTML report
+  const htmlContent = generateSocEfficacyReport(
+    organisationName,
+    reportPeriod,
+    scoreData.table28_final_score,
+    socData.toObject()
+  );
+
+  // Generate PDF using Puppeteer
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu'
+    ]
+  });
+
+  const page = await browser.newPage();
+  await page.setContent(htmlContent, { waitUntil: 'networkidle0', timeout: 60000 });
+
+  const pdfBuffer = await page.pdf({
+    format: 'A4',
+    printBackground: true,
+    margin: { top: '0mm', right: '0mm', bottom: '0mm', left: '0mm' },
+    preferCSSPageSize: true
+  });
+
+  await browser.close();
+
+  // SECURITY: Sanitize all path components to prevent path traversal
+  const sanitizedOrgName = organisationName.replace(/[^a-zA-Z0-9]/g, '_');
+  const sanitizedOrgId = organizationId.replace(/[^a-zA-Z0-9_-]/g, '');
+
+  // Validate no path traversal attempts
+  if (sanitizedOrgId.includes('..') || sanitizedOrgId !== organizationId) {
+    throw new ApiError(403, 'Invalid organization ID');
+  }
+
+  // Generate unique filename
+  const timestamp = Date.now();
+  const fileName = `${sanitizedOrgName}_SOC_Efficacy_${timestamp}.pdf`;
+
+  // Create organization-specific directory under storage/reports
+  const storageDir = path.join(__dirname, '..', 'storage', 'reports', sanitizedOrgId);
+  if (!fs.existsSync(storageDir)) {
+    fs.mkdirSync(storageDir, { recursive: true });
+    console.log(`Created directory: ${storageDir}`);
+  }
+
+  // Save PDF to organization-specific directory
+  const filePath = path.join(storageDir, fileName);
+  fs.writeFileSync(filePath, pdfBuffer);
+
+  console.log(`SOC Efficacy report generated successfully: ${fileName}`);
+  console.log(`PDF saved to: ${filePath}`);
+
+  // Save report metadata to database
+  const reportMetadata = {
+    report_name: reportName || `SOC Efficacy Report - ${organisationName}`,
+    description: description || 'SOC Efficacy Assessment Report (SEBI CSCRF)',
+    frequency: frequency,
+    template: 'SOC Efficacy',
+    file_path: filePath,
+    file_name: fileName,
+    file_size: pdfBuffer.length,
+    file_extension: 'pdf',
+    organisation_id: organizationId,
+    created_by: userId,
+    report_period_start: start_date ? new Date(start_date) : null,
+    report_period_end: end_date ? new Date(end_date) : null,
+    metadata: {
+      final_score: scoreData.table28_final_score.final_score,
+      domain_scores: scoreData.table28_final_score.domains.map(d => ({
+        name: d.name,
+        score: d.score,
+        normalized_score: d.normalized_score
+      })),
+      soc_efficacy_snapshot: socData.toObject() // Save snapshot of data at generation time
+    }
+  };
+
+  const savedReport = await Report.create(reportMetadata);
+
+  return res.status(200).json(
+    new ApiResponse(200, {
+      success: true,
+      message: 'SOC Efficacy report generated successfully',
+      report: savedReport,
+      scores: scoreData.table28_final_score
+    }, 'SOC Efficacy report generated and saved successfully')
+  );
+}
+
 // Generate Report
 const generateReport = asyncHandler(async (req, res) => {
   try {
-    const { reportName, frequency = 'on-demand', description = '', template = 'executive', start_date, end_date } = req.body;
+    const { reportName, frequency = 'on-demand', description = '', template = 'executive', start_date, end_date, soc_efficacy_data } = req.body;
 
     // Get credentials from client credentials (set by auth middleware)
     const wazuhCreds = req.clientCreds?.wazuhCredentials;
@@ -225,6 +375,22 @@ const generateReport = asyncHandler(async (req, res) => {
     const organizationId = req.clientCreds?.organizationId;
     const clientName = req.clientCreds?.clientName || 'Client';
     const organisationName = req.clientCreds?.organisationName || 'Organization';
+    const userId = req.user?._id || req.user?.id;
+
+    // Check if this is a SOC Efficacy report
+    if (template === 'SOC Efficacy' || template === 'soc_efficacy') {
+      return await generateSocEfficacyReportHandler(req, res, {
+        reportName,
+        frequency,
+        description,
+        start_date,
+        end_date,
+        organizationId,
+        organisationName,
+        userId,
+        socEfficacyData: soc_efficacy_data
+      });
+    }
 
     if (!wazuhCreds || !indexerCreds) {
       throw new ApiError(400, "Wazuh or Indexer credentials not found for this client");

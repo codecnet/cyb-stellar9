@@ -1,11 +1,20 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { DocumentTextIcon, ArrowDownTrayIcon, CalendarIcon, TrashIcon, ClockIcon } from '@heroicons/react/24/outline'
+import { DocumentTextIcon, ArrowDownTrayIcon, CalendarIcon, TrashIcon, ClockIcon, QuestionMarkCircleIcon } from '@heroicons/react/24/outline'
 import { PermissionGate } from '@/components/common/PermissionGate'
 import { useClient } from '@/contexts/ClientContext'
+import { Table34Enhancements } from './components/Table34Enhancements'
+import { Table29Assets } from './components/Table29Assets'
+import { Table30Integration } from './components/Table30Integration'
+import { Table31Operations } from './components/Table31Operations'
+import { Table32Personnel } from './components/Table32Personnel'
+import { Table33Governance } from './components/Table33Governance'
+import { FieldLabel } from './components/FieldLabel'
+import { FIELD_DESCRIPTIONS } from './components/fieldDescriptions'
 
 const BASE_URL = process.env.NEXT_PUBLIC_RBAC_BASE_IP
+
 
 interface Report {
   id: string
@@ -36,7 +45,9 @@ export default function ReportsPage() {
   const [reports, setReports] = useState<Report[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [isSavingData, setIsSavingData] = useState(false)
   const { selectedClient, isClientMode } = useClient()
+  const [selectedTemplate, setSelectedTemplate] = useState('executive')
 
   // Time range filters
   const [timeRangeType, setTimeRangeType] = useState<'relative' | 'absolute'>(() => {
@@ -66,6 +77,143 @@ export default function ReportsPage() {
     return new Date().toISOString().slice(0, 16)
   })
 
+  // SOC Efficacy Form State
+  const [socEfficacyData, setSocEfficacyData] = useState({
+    table29_assets: {
+      network_devices: 0,
+      security_solutions: 0,
+      endpoints: 0,
+      applications: 0,
+      databases: 0,
+      servers: 0
+    },
+    table30_integration: {
+      pam: { to_be_integrated: 0, actually_integrated: 0, na: false },
+      antivirus_epp: { to_be_integrated: 0, actually_integrated: 0, na: false },
+      edr: { to_be_integrated: 0, actually_integrated: 0, na: false },
+      dlp: { to_be_integrated: 0, actually_integrated: 0, na: false },
+      dam: { to_be_integrated: 0, actually_integrated: 0, na: false },
+      waf: { to_be_integrated: 0, actually_integrated: 0, na: false },
+      email_gateway: { to_be_integrated: 0, actually_integrated: 0, na: false },
+      web_gateway_proxy: { to_be_integrated: 0, actually_integrated: 0, na: false },
+      ddos: { to_be_integrated: 0, actually_integrated: 0, na: false },
+      siem: { to_be_integrated: 0, actually_integrated: 0, na: false }
+    },
+    table31_operations: {
+      log_sources_in_siem: 0,
+      total_log_sources: 0,
+      metric1_log_ingestion_na: false,
+      max_log_latency_minutes: 0,
+      metric2_log_latency_na: false,
+      technologies_on_latest_versions: 0,
+      total_technologies_deployed: 0,
+      metric3_version_control_na: false,
+      open_advisories: 0,
+      total_advisories: 0,
+      metric4_vulnerability_closure_na: false,
+      technologies_with_use_cases: 0,
+      total_soc_technologies: 0,
+      metric5_siem_use_cases_na: false,
+      use_cases_not_triggered: 0,
+      total_use_cases: 0,
+      metric6_use_cases_triggered_na: false,
+      playbooks_defined: 0,
+      total_use_cases_for_playbooks: 0,
+      metric7_playbooks_na: false,
+      false_positives: 0,
+      total_alerts_for_fp: 0,
+      metric8_false_positives_na: false,
+      false_negatives: 0,
+      total_alerts_for_fn: 0,
+      metric9_false_negatives_na: false,
+      threat_intel_processing_time_minutes: 0,
+      metric10_threat_intel_na: false,
+      critical_log_verification_daily: 0,
+      metric11_log_verification_na: false,
+      critical_integration_check_daily: 0,
+      metric12_integration_check_na: false,
+      critical_siem_rules_configured: 0,
+      metric13_siem_rules_na: false,
+      critical_privilege_check_weekly: 0,
+      metric14_privilege_check_na: false,
+      critical_backups_periodic: 0,
+      metric15_backups_na: false
+    },
+    table32_personnel: {
+      l1_2years: 0,
+      l1_3years: 0,
+      l1_4years: 0,
+      l1_5years: 0,
+      category_l1_na: false,
+      l2_6years: 0,
+      l2_7years: 0,
+      l2_8years: 0,
+      category_l2_na: false,
+      l3_9years: 0,
+      l3_10years: 0,
+      l3_11years: 0,
+      l3_12plus_years: 0,
+      category_l3_na: false
+    },
+    table33_governance: {
+      total_cybersecurity_budget: 0,
+      soc_budget: 0,
+      metric1_budget_na: false,
+      training_budget_percentage: 0,
+      metric2_training_na: false,
+      it_committee_review_done: 0,
+      metric3_it_committee_na: false,
+      tech_committee_recommendations_submitted: 0,
+      metric4_tech_committee_na: false
+    },
+    table34_enhancements: {
+      native_dashboard: 0,
+      native_dashboard_na: false,
+      custom_dashboard: 0,
+      custom_dashboard_na: false,
+      threat_hunting_service_provider: 0,
+      threat_hunting_service_provider_na: false,
+      threat_hunting_internal_team: 0,
+      threat_hunting_internal_team_na: false,
+      threat_hunting_quarterly: 0,
+      threat_hunting_quarterly_na: false,
+      threat_hunting_half_yearly: 0,
+      threat_hunting_half_yearly_na: false,
+      total_hypotheses: 0,
+      hypotheses_vulnerabilities: 0,
+      hypotheses_vulnerabilities_na: false,
+      hypotheses_iocs: 0,
+      hypotheses_iocs_na: false,
+      hypotheses_ioas: 0,
+      hypotheses_ioas_na: false,
+      threat_intel_integrated_siem: 0,
+      threat_intel_integrated_siem_na: false,
+      soar_actions_triggered: 0,
+      soar_actions_created: 0,
+      soar_actions_na: false,
+      tech_decoy: 0,
+      tech_decoy_na: false,
+      tech_sandboxing: 0,
+      tech_sandboxing_na: false,
+      tech_ueba: 0,
+      tech_ueba_na: false,
+      tech_vulnerability_mgmt: 0,
+      tech_vulnerability_mgmt_na: false,
+      tech_encrypted_traffic_mgmt: 0,
+      tech_encrypted_traffic_mgmt_na: false,
+      tech_dns_security: 0,
+      tech_dns_security_na: false,
+      tech_ips: 0,
+      tech_ips_na: false,
+      tech_data_classification: 0,
+      tech_data_classification_na: false
+    }
+  })
+
+  const [calculatedScores, setCalculatedScores] = useState<any>(null)
+  const [isSavingAuto, setIsSavingAuto] = useState(false)
+  const [saveDebounceTimer, setSaveDebounceTimer] = useState<NodeJS.Timeout | null>(null)
+
   // Save time range settings to localStorage
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -80,6 +228,13 @@ export default function ReportsPage() {
   useEffect(() => {
     fetchReports()
   }, [selectedClient])
+
+  // Fetch SOC efficacy data when template changes to SOC Efficacy
+  useEffect(() => {
+    if (selectedTemplate === 'SOC Efficacy' || selectedTemplate === 'soc_efficacy') {
+      fetchSocEfficacyData()
+    }
+  }, [selectedTemplate, selectedClient])
 
   const fetchReports = async () => {
     try {
@@ -136,6 +291,287 @@ export default function ReportsPage() {
     }
   }
 
+  const fetchSocEfficacyData = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) return
+
+      let url = `${BASE_URL}/soc-efficacy`
+      if (isClientMode && selectedClient?.id) {
+        url += `?orgId=${selectedClient.id}`
+      }
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.data?.exists && data.data?.data) {
+          setSocEfficacyData(data.data.data)
+          if (data.data.scores) {
+            setCalculatedScores(data.data.scores)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching SOC efficacy data:', error)
+    }
+  }
+
+  const validateSocEfficacyData = () => {
+    const errors: string[] = []
+
+    // Validate Table 30 - Integration (at least one technology should not be N/A)
+    const table30 = socEfficacyData.table30_integration
+    const allTable30NA = Object.keys(table30).every(tech =>
+      typeof table30[tech as keyof typeof table30] === 'object' &&
+      (table30[tech as keyof typeof table30] as any).na === true
+    )
+    if (allTable30NA) {
+      errors.push('Table 30 (Asset Integration): All technologies are marked as N/A. At least one must be active.')
+    }
+
+    // Validate Table 31 - Operations (at least one metric should not be N/A)
+    const table31 = socEfficacyData.table31_operations
+    const naFields31 = [
+      'metric1_alerts_na', 'metric2_closed_na', 'metric3_critical_na', 'metric4_high_na',
+      'metric5_medium_na', 'metric6_low_na', 'metric7_mttr_na', 'metric8_mtta_na',
+      'metric9_false_positives_na', 'metric10_escalations_na', 'metric11_sla_na',
+      'metric12_sla_breaches_na', 'metric13_auto_closed_na', 'metric14_hunting_na',
+      'metric15_threat_intel_na'
+    ]
+    const allTable31NA = naFields31.every(field => table31[field as keyof typeof table31] === true)
+    if (allTable31NA) {
+      errors.push('Table 31 (SOC Operations): All metrics are marked as N/A. At least one must be active.')
+    }
+
+    // Validate Table 32 - Personnel (at least one category should not be N/A)
+    const table32 = socEfficacyData.table32_personnel
+    const naFields32 = ['category_l1_na', 'category_l2_na', 'category_l3_na']
+    const allTable32NA = naFields32.every(field => table32[field as keyof typeof table32] === true)
+    if (allTable32NA) {
+      errors.push('Table 32 (Personnel Competency): All categories are marked as N/A. At least one must be active.')
+    }
+
+    // Validate Table 33 - Governance (at least one metric should not be N/A)
+    const table33 = socEfficacyData.table33_governance
+    const naFields33 = ['metric1_budget_na', 'metric2_training_na', 'metric3_it_committee_na', 'metric4_tech_committee_na']
+    const allTable33NA = naFields33.every(field => table33[field as keyof typeof table33] === true)
+    if (allTable33NA) {
+      errors.push('Table 33 (SOC Governance): All metrics are marked as N/A. At least one must be active.')
+    }
+
+    // Validate Table 34 - Enhancements (at least one field should not be N/A)
+    const table34 = socEfficacyData.table34_enhancements
+    const naFields34 = [
+      'native_dashboard_na', 'custom_dashboard_na', 'hypotheses_1_na', 'hypotheses_2_na',
+      'hypotheses_3_na', 'hypotheses_4_na', 'hypotheses_5_na', 'hypotheses_6_na',
+      'hypotheses_7_na', 'threat_intel_integration_na', 'soar_na', 'tech_ndr_na',
+      'tech_ueba_na', 'tech_sandboxing_na', 'tech_deception_na', 'tech_vulnerability_mgmt_na',
+      'tech_encrypted_traffic_mgmt_na', 'tech_dns_security_na', 'tech_ips_na',
+      'tech_data_classification_na'
+    ]
+    const allTable34NA = naFields34.every(field => table34[field as keyof typeof table34] === true)
+    if (allTable34NA) {
+      errors.push('Table 34 (SOC Enhancements): All fields are marked as N/A. At least one must be active.')
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors
+    }
+  }
+
+  const saveSocEfficacyData = async () => {
+    try {
+      setIsSavingData(true)
+
+      // Validate data before saving
+      const validation = validateSocEfficacyData()
+      if (!validation.isValid) {
+        const errorMessage = 'Cannot save SOC Efficacy data:\n\n' + validation.errors.join('\n\n')
+        alert(errorMessage)
+        setIsSavingData(false)
+        return
+      }
+
+      const token = localStorage.getItem('token')
+      if (!token) {
+        throw new Error('No authentication token found')
+      }
+
+      let url = `${BASE_URL}/soc-efficacy`
+      if (isClientMode && selectedClient?.id) {
+        url += `?orgId=${selectedClient.id}`
+      }
+
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(socEfficacyData)
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.message || 'Failed to save SOC efficacy data')
+      }
+
+      const data = await response.json()
+      if (data.success) {
+        alert('SOC efficacy data saved successfully!')
+        if (data.data.scores) {
+          setCalculatedScores(data.data.scores)
+        }
+      }
+    } catch (error: any) {
+      console.error('Error saving SOC efficacy data:', error)
+      alert(error.message || 'Failed to save SOC efficacy data')
+    } finally {
+      setIsSavingData(false)
+    }
+  }
+
+  // Helper to convert empty strings to 0 for backend
+  const sanitizeDataForSave = (data: any): any => {
+    const sanitized = JSON.parse(JSON.stringify(data))
+
+    const sanitizeObject = (obj: any) => {
+      for (const key in obj) {
+        if (obj[key] === '') {
+          obj[key] = 0
+        } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+          sanitizeObject(obj[key])
+        }
+      }
+    }
+
+    sanitizeObject(sanitized)
+    return sanitized
+  }
+
+  const autoSaveSocEfficacyData = async (data: any) => {
+    try {
+      setIsSavingAuto(true)
+      const token = localStorage.getItem('token')
+      if (!token) return
+
+      // Validate before saving
+      const validation = validateSocEfficacyData()
+      if (!validation.isValid) {
+        console.warn('Validation failed, skipping auto-save:', validation.errors)
+        setIsSavingAuto(false)
+        return
+      }
+
+      let url = `${BASE_URL}/soc-efficacy`
+      if (isClientMode && selectedClient?.id) {
+        url += `?orgId=${selectedClient.id}`
+      }
+
+      // Sanitize data: convert empty strings to 0
+      const sanitizedData = sanitizeDataForSave(data)
+
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(sanitizedData)
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success) {
+          // Refetch after save to update scores (debouncing ensures this only happens when user stops typing)
+          await fetchSocEfficacyData()
+        }
+      }
+    } catch (error: any) {
+      console.error('Auto-save error:', error)
+    } finally {
+      setIsSavingAuto(false)
+    }
+  }
+
+  const updateSocEfficacyField = (table: string, field: string, value: any) => {
+    setSocEfficacyData(prev => {
+      const newData = {
+        ...prev,
+        [table]: {
+          ...prev[table as keyof typeof prev],
+          [field]: value
+        }
+      }
+
+      // Auto-calculate total_log_sources when Table 29 changes
+      if (table === 'table29_assets') {
+        const table29 = newData.table29_assets
+        const totalLogSources =
+          table29.network_devices +
+          table29.security_solutions +
+          table29.endpoints +
+          table29.applications +
+          table29.databases +
+          table29.servers
+
+        newData.table31_operations = {
+          ...newData.table31_operations,
+          total_log_sources: totalLogSources
+        }
+      }
+
+      return newData
+    })
+  }
+
+  const updateIntegrationField = (tech: string, field: 'to_be_integrated' | 'actually_integrated' | 'na', value: number | boolean | '') => {
+    setSocEfficacyData(prev => {
+      const newData = {
+        ...prev,
+        table30_integration: {
+          ...prev.table30_integration,
+          [tech]: {
+            ...prev.table30_integration[tech as keyof typeof prev.table30_integration],
+            [field]: value
+          }
+        }
+      }
+
+      // Auto-calculate total_soc_technologies when Table 30 changes
+      const table30 = newData.table30_integration
+      const totalSocTechnologies = Object.keys(table30).filter(techKey => {
+        const techData = table30[techKey as keyof typeof table30]
+        return typeof techData === 'object' && !(techData as any).na
+      }).length
+
+      newData.table31_operations = {
+        ...newData.table31_operations,
+        total_soc_technologies: totalSocTechnologies
+      }
+
+      return newData
+    })
+  }
+
+  // Trigger save after blur (give React time to update state)
+  const triggerSaveOnBlur = () => {
+    setTimeout(() => {
+      // Use a callback to ensure we get the latest state
+      setSocEfficacyData(currentData => {
+        autoSaveSocEfficacyData(currentData)
+        return currentData
+      })
+    }, 150)
+  }
+
   const handleCreateReport = async (e: React.FormEvent) => {
     e.preventDefault()
     const form = e.target as HTMLFormElement
@@ -177,6 +613,19 @@ export default function ReportsPage() {
       description: formData.get('description') as string,
       frequency: 'on-demand', // Set to on-demand since we're using custom time ranges
       template: selectedTemplateText,
+    }
+
+    // For SOC Efficacy reports, include the efficacy data
+    if (selectedTemplate === 'SOC Efficacy' || selectedTemplate === 'soc_efficacy') {
+      // Validate SOC efficacy data before generating report
+      const validation = validateSocEfficacyData()
+      if (!validation.isValid) {
+        const errorMessage = 'Cannot generate SOC Efficacy report:\n\n' + validation.errors.join('\n\n')
+        alert(errorMessage)
+        return
+      }
+      // Include current form data to save before generating report
+      reportData.soc_efficacy_data = socEfficacyData
     }
 
     // Add time filter parameters if not "All Time"
@@ -429,13 +878,133 @@ export default function ReportsPage() {
             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">
               Report Template *
             </label>
-            <select name="template" required className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 rounded-xl
+            <select
+              name="template"
+              required
+              value={selectedTemplate}
+              onChange={(e) => setSelectedTemplate(e.target.value)}
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 rounded-xl
                              focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400
                              text-gray-900 dark:text-white transition-all duration-200">
               <option value="executive">Executive Summary</option>
+              <option value="SOC Efficacy">SOC Efficacy</option>
             </select>
           </div>
 
+          {/* SOC Efficacy Input Fields - Conditional Rendering */}
+          {(selectedTemplate === 'SOC Efficacy' || selectedTemplate === 'soc_efficacy') && (
+            <div className="space-y-6 border-t border-gray-200 dark:border-gray-600 pt-6 mt-6">
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
+                <p className="text-sm text-blue-800 dark:text-blue-200">
+                  <strong>Note:</strong> Fill in the SOC efficacy assessment data below. Data will be auto-saved and used for report generation.
+                </p>
+              </div>
+
+              {/* Calculated Scores Display */}
+              {calculatedScores && (
+                <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl p-6 text-white">
+                  <h3 className="text-xl font-bold mb-4">Current SOC Efficacy Score</h3>
+                  <div className="text-5xl font-bold mb-6">{calculatedScores.final_score.toFixed(2)}</div>
+
+                  {/* Domain Scores */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                    {calculatedScores.domains.map((domain: any, idx: number) => {
+                      // Max scores based on normalization formula: domain1=100, domain2=75, domain3=100, domain4=65, domain5=75
+                      const maxScores = [100, 75, 100, 65, 75]
+                      const maxScore = domain.max_score || maxScores[idx] || 100
+
+                      // Normalization weights: domain1=25%, domain2=25%, domain3=20%, domain4=15%, domain5=15%
+                      const weights = [25, 25, 20, 15, 15]
+                      const weight = weights[idx]
+
+                      // Calculate normalized score: (domain_score * weight / max_score)
+                      const normalizedScore = Math.round((domain.score * weight / maxScore) * 100) / 100
+
+                      return (
+                        <div key={idx} className="bg-white/10 rounded-lg p-4">
+                          <div className="text-xs opacity-80 mb-1">{domain.name}</div>
+                          <div className="text-3xl font-bold mb-2">{domain.score.toFixed(2)}</div>
+
+                          {/* Normalization Formula */}
+                          <div className="text-[10px] opacity-70 bg-white/10 rounded p-2 mt-2">
+                            <div className="mb-1">Weight: {weight}%</div>
+                            <div className="italic font-mono">
+                              ({domain.score.toFixed(2)} × {weight} / {maxScore}) = {normalizedScore.toFixed(2)}
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+
+              <Table29Assets
+                data={socEfficacyData.table29_assets}
+                updateField={updateSocEfficacyField}
+                onBlurSave={triggerSaveOnBlur}
+              />
+
+              <Table30Integration
+                data={socEfficacyData.table30_integration}
+                updateIntegrationField={updateIntegrationField}
+                scores={calculatedScores?.domains?.find((d: any) => d.name.includes('Coverage of Assets'))}
+                onBlurSave={triggerSaveOnBlur}
+              />
+
+              <Table31Operations
+                data={socEfficacyData.table31_operations}
+                updateField={updateSocEfficacyField}
+                scores={calculatedScores?.domains?.find((d: any) => d.name.includes('SOC Operations'))}
+                onBlurSave={triggerSaveOnBlur}
+              />
+
+              <Table32Personnel
+                data={socEfficacyData.table32_personnel}
+                updateField={updateSocEfficacyField}
+                scores={calculatedScores?.domains?.find((d: any) => d.name.includes('Personnel'))}
+                onBlurSave={triggerSaveOnBlur}
+              />
+
+              <Table33Governance
+                data={socEfficacyData.table33_governance}
+                updateField={updateSocEfficacyField}
+                scores={calculatedScores?.domains?.find((d: any) => d.name.includes('Governance'))}
+                onBlurSave={triggerSaveOnBlur}
+              />
+
+              <Table34Enhancements
+                data={socEfficacyData.table34_enhancements}
+                updateField={updateSocEfficacyField}
+                scores={calculatedScores?.domains?.find((d: any) => d.name.includes('Enhancements'))}
+                onBlurSave={triggerSaveOnBlur}
+              />
+
+              {/* Auto-save Indicator */}
+              <div className="flex justify-end items-center gap-2 text-sm">
+                {isSavingAuto && (
+                  <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Auto-saving...</span>
+                  </div>
+                )}
+                {!isSavingAuto && calculatedScores && (
+                  <div className="text-green-600 dark:text-green-400 flex items-center gap-2">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span>All changes saved</span>
+                  </div>
+                )}
+              </div>
+
+
+            </div>
+          )}
           <div className="space-y-2">
             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">
               Report Description (Optional)
