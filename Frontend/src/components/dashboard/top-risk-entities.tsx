@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { wazuhApi } from '@/lib/api';
 import { useClient } from '@/contexts/ClientContext';
 import { ClockIcon } from '@heroicons/react/24/outline';
+import { subscribeToDataChanges } from '@/lib/alertsStream';
 
 interface RiskHost {
   name: string;
@@ -61,32 +62,35 @@ export function TopRiskEntities({ className = '' }: TopRiskEntitiesProps) {
   const [selectedHours, setSelectedHours] = useState<number>(0); // Default to All Time
   const { selectedClient, isClientMode } = useClient();
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
+  const fetchData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
 
-        const orgId = isClientMode && selectedClient?.id ? selectedClient.id : undefined;
-        // Pass 0 as undefined to get all time data
-        const hoursParam = selectedHours > 0 ? selectedHours : undefined;
-        const response = await wazuhApi.getTopRiskEntities(orgId, hoursParam);
+      const orgId = isClientMode && selectedClient?.id ? selectedClient.id : undefined;
+      const hoursParam = selectedHours > 0 ? selectedHours : undefined;
+      const response = await wazuhApi.getTopRiskEntities(orgId, hoursParam);
 
-        const riskData = response.data || response;
-        setData(riskData);
-      } catch (err: any) {
-        console.error('Error fetching top risk entities:', err);
-        setError(err.message || 'Failed to fetch risk entities');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
-    const interval = setInterval(fetchData, 60000); // Refresh every minute
-
-    return () => clearInterval(interval);
+      const riskData = response.data || response;
+      setData(riskData);
+    } catch (err: any) {
+      console.error('Error fetching top risk entities:', err);
+      setError(err.message || 'Failed to fetch risk entities');
+    } finally {
+      setIsLoading(false);
+    }
   }, [selectedClient?.id, isClientMode, selectedHours]);
+
+  // Initial fetch + re-fetch when client/hours change
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // SSE: re-fetch when backend detects data changed (replaces 60s polling)
+  useEffect(() => {
+    const orgId = isClientMode && selectedClient?.id ? selectedClient.id : null;
+    return subscribeToDataChanges(orgId, fetchData);
+  }, [selectedClient?.id, isClientMode]);
 
   // Format timestamp to relative time
   const formatTime = (timestamp: string | null): string => {

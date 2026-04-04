@@ -6,10 +6,8 @@ import puppeteer from 'puppeteer';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { generateHtmlReport, generateSocEfficacyReport } from '../templates/reportTemplate.html.js';
+import { generateHtmlReport } from '../templates/reportTemplate.html.js';
 import Report from '../models/report.model.js';
-import SocEfficacy from '../models/socEfficacy.model.js';
-import { calculateFinalScore, calculateIntegrationCounts } from '../utils/socEfficacyScoring.util.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -216,158 +214,10 @@ async function fetchSCAData(wazuhHost, token) {
   }
 }
 
-// Generate SOC Efficacy Report Handler
-async function generateSocEfficacyReportHandler(req, res, params) {
-  const { reportName, frequency, description, start_date, end_date, organizationId, organisationName, userId, socEfficacyData } = params;
-
-  console.log(`\n========== GENERATING SOC EFFICACY REPORT ==========`);
-  console.log(`Organization: ${organisationName}`);
-  console.log(`Organization ID: ${organizationId}`);
-  console.log(`Report Name: ${reportName}`);
-  console.log(`=========================================\n`);
-
-  let socData;
-
-  // If SOC efficacy data is provided in the request, save it first
-  if (socEfficacyData) {
-    console.log('Saving SOC efficacy data before generating report...');
-
-    // Auto-calculate integration counts from assets
-    const integrationCounts = calculateIntegrationCounts(socEfficacyData.table29_assets || {});
-
-    // Update to_be_integrated values
-    const updatedIntegration = { ...socEfficacyData.table30_integration };
-    for (const tech in integrationCounts) {
-      if (updatedIntegration[tech]) {
-        updatedIntegration[tech].to_be_integrated = integrationCounts[tech];
-      }
-    }
-
-    const dataToSave = {
-      ...socEfficacyData,
-      table30_integration: updatedIntegration
-    };
-
-    // Save to database
-    socData = await SocEfficacy.upsertByOrganisation(organizationId, dataToSave, userId);
-    console.log('SOC efficacy data saved successfully');
-  } else {
-    // Fetch existing SOC efficacy data for the organization
-    socData = await SocEfficacy.findByOrganisation(organizationId);
-
-    if (!socData) {
-      throw new ApiError(404, 'No SOC efficacy data found for this organization. Please enter SOC efficacy data first.');
-    }
-  }
-
-  // Calculate scores
-  const scoreData = calculateFinalScore(socData.toObject());
-
-  // Prepare report period
-  const reportPeriod = {
-    start: start_date ? new Date(start_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A',
-    end: end_date ? new Date(end_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'
-  };
-
-  // Generate HTML report
-  const htmlContent = generateSocEfficacyReport(
-    organisationName,
-    reportPeriod,
-    scoreData.table28_final_score,
-    socData.toObject()
-  );
-
-  // Generate PDF using Puppeteer
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu'
-    ]
-  });
-
-  const page = await browser.newPage();
-  await page.setContent(htmlContent, { waitUntil: 'networkidle0', timeout: 60000 });
-
-  const pdfBuffer = await page.pdf({
-    format: 'A4',
-    printBackground: true,
-    margin: { top: '0mm', right: '0mm', bottom: '0mm', left: '0mm' },
-    preferCSSPageSize: true
-  });
-
-  await browser.close();
-
-  // SECURITY: Sanitize all path components to prevent path traversal
-  const sanitizedOrgName = organisationName.replace(/[^a-zA-Z0-9]/g, '_');
-  const sanitizedOrgId = organizationId.replace(/[^a-zA-Z0-9_-]/g, '');
-
-  // Validate no path traversal attempts
-  if (sanitizedOrgId.includes('..') || sanitizedOrgId !== organizationId) {
-    throw new ApiError(403, 'Invalid organization ID');
-  }
-
-  // Generate unique filename
-  const timestamp = Date.now();
-  const fileName = `${sanitizedOrgName}_SOC_Efficacy_${timestamp}.pdf`;
-
-  // Create organization-specific directory under storage/reports
-  const storageDir = path.join(__dirname, '..', 'storage', 'reports', sanitizedOrgId);
-  if (!fs.existsSync(storageDir)) {
-    fs.mkdirSync(storageDir, { recursive: true });
-    console.log(`Created directory: ${storageDir}`);
-  }
-
-  // Save PDF to organization-specific directory
-  const filePath = path.join(storageDir, fileName);
-  fs.writeFileSync(filePath, pdfBuffer);
-
-  console.log(`SOC Efficacy report generated successfully: ${fileName}`);
-  console.log(`PDF saved to: ${filePath}`);
-
-  // Save report metadata to database
-  const reportMetadata = {
-    report_name: reportName || `SOC Efficacy Report - ${organisationName}`,
-    description: description || 'SOC Efficacy Assessment Report (SEBI CSCRF)',
-    frequency: frequency,
-    template: 'SOC Efficacy',
-    file_path: filePath,
-    file_name: fileName,
-    file_size: pdfBuffer.length,
-    file_extension: 'pdf',
-    organisation_id: organizationId,
-    created_by: userId,
-    report_period_start: start_date ? new Date(start_date) : null,
-    report_period_end: end_date ? new Date(end_date) : null,
-    metadata: {
-      final_score: scoreData.table28_final_score.final_score,
-      domain_scores: scoreData.table28_final_score.domains.map(d => ({
-        name: d.name,
-        score: d.score,
-        normalized_score: d.normalized_score
-      })),
-      soc_efficacy_snapshot: socData.toObject() // Save snapshot of data at generation time
-    }
-  };
-
-  const savedReport = await Report.create(reportMetadata);
-
-  return res.status(200).json(
-    new ApiResponse(200, {
-      success: true,
-      message: 'SOC Efficacy report generated successfully',
-      report: savedReport,
-      scores: scoreData.table28_final_score
-    }, 'SOC Efficacy report generated and saved successfully')
-  );
-}
-
 // Generate Report
 const generateReport = asyncHandler(async (req, res) => {
   try {
-    const { reportName, frequency = 'on-demand', description = '', template = 'executive', start_date, end_date, soc_efficacy_data } = req.body;
+    const { reportName, frequency = 'on-demand', description = '', template = 'executive', start_date, end_date } = req.body;
 
     // Get credentials from client credentials (set by auth middleware)
     const wazuhCreds = req.clientCreds?.wazuhCredentials;
@@ -375,22 +225,6 @@ const generateReport = asyncHandler(async (req, res) => {
     const organizationId = req.clientCreds?.organizationId;
     const clientName = req.clientCreds?.clientName || 'Client';
     const organisationName = req.clientCreds?.organisationName || 'Organization';
-    const userId = req.user?._id || req.user?.id;
-
-    // Check if this is a SOC Efficacy report
-    if (template === 'SOC Efficacy' || template === 'soc_efficacy') {
-      return await generateSocEfficacyReportHandler(req, res, {
-        reportName,
-        frequency,
-        description,
-        start_date,
-        end_date,
-        organizationId,
-        organisationName,
-        userId,
-        socEfficacyData: soc_efficacy_data
-      });
-    }
 
     if (!wazuhCreds || !indexerCreds) {
       throw new ApiError(400, "Wazuh or Indexer credentials not found for this client");
@@ -401,12 +235,15 @@ const generateReport = asyncHandler(async (req, res) => {
     const authString = `${INDEXER_USER}:${INDEXER_PASS}`;
     const authEncoded = Buffer.from(authString).toString("base64");
 
-    // Calculate time range - use custom dates if provided, otherwise "All Time" (no date filter)
-    let startDate = null, endDate = null;
-    const hasDateFilter = !!(start_date && end_date);
-    if (hasDateFilter) {
+    // Calculate time range - use custom dates if provided, otherwise default to last 7 days
+    let startDate, endDate;
+    if (start_date && end_date) {
       startDate = new Date(start_date);
       endDate = new Date(end_date);
+    } else {
+      // Default to last 7 days if no dates provided
+      endDate = new Date();
+      startDate = new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000);
     }
 
     console.log(`\n========== GENERATING REPORT ==========`);
@@ -414,7 +251,7 @@ const generateReport = asyncHandler(async (req, res) => {
     console.log(`Organization ID: ${organizationId}`);
     console.log(`Client Name: ${clientName}`);
     console.log(`Frequency: ${frequency}`);
-    console.log(`Date range: ${hasDateFilter ? `${startDate.toISOString()} to ${endDate.toISOString()}` : 'All Time'}`);
+    console.log(`Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
     console.log(`Wazuh Host: ${WAZUH_HOST}`);
     console.log(`Indexer Host: ${INDEXER_HOST}`);
     console.log(`=======================================\n`);
@@ -422,122 +259,82 @@ const generateReport = asyncHandler(async (req, res) => {
     // Get Wazuh token first
     const token = await getWazuhToken(WAZUH_HOST, WAZUH_USER, WAZUH_PASS);
 
-    // Fetch alert statistics from Wazuh Indexer using aggregations (fast — single request)
-    const mustClauses = [
-      { range: { 'rule.level': { gte: 8 } } }
-    ];
-    if (hasDateFilter) {
-      mustClauses.unshift({
-        range: {
-          '@timestamp': {
-            gte: startDate.toISOString(),
-            lte: endDate.toISOString()
-          }
-        }
-      });
-    }
-    const alertBaseQuery = { bool: { must: mustClauses } };
-
-    const statsQuery = {
-      size: 10,
+    // Fetch ALL alerts from Wazuh Indexer using search_after pagination (Level 8 and above only)
+    const BATCH_SIZE = 1000;
+    const baseQuery = {
+      size: BATCH_SIZE,
       track_total_hits: true,
-      query: alertBaseQuery,
-      sort: [{ '@timestamp': { order: 'desc' } }],
-      _source: ['rule.level', 'rule.description', 'rule.id', 'rule.groups', '@timestamp', 'agent.name', 'agent.id', 'data.srcip'],
-      aggs: {
-        severity_ranges: {
-          range: {
-            field: 'rule.level',
-            ranges: [
-              { key: 'minor', from: 8, to: 12 },
-              { key: 'major', from: 12, to: 15 },
-              { key: 'critical', from: 15, to: 100 }
-            ]
-          }
-        },
-        daily_trend: {
-          date_histogram: {
-            field: '@timestamp',
-            calendar_interval: 'day',
-            format: 'yyyy-MM-dd'
-          }
-        },
-        top_alerts: {
-          terms: {
-            field: 'rule.description',
-            size: 10,
-            order: { _count: 'desc' }
-          },
-          aggs: {
-            max_level: { max: { field: 'rule.level' } },
-            unique_hosts: { cardinality: { field: 'agent.name' } },
-            last_seen: { max: { field: '@timestamp' } },
-            sample_host: { terms: { field: 'agent.name', size: 1 } }
-          }
-        },
-        alert_types: {
-          terms: {
-            field: 'rule.groups',
-            size: 5,
-            order: { _count: 'desc' }
-          }
+      query: {
+        bool: {
+          must: [
+            {
+              range: {
+                '@timestamp': {
+                  gte: startDate.toISOString(),
+                  lte: endDate.toISOString()
+                }
+              }
+            },
+            {
+              range: {
+                'rule.level': {
+                  gte: 8
+                }
+              }
+            }
+          ]
         }
-      }
+      },
+      sort: [{ '@timestamp': { order: 'desc' } }, { '_id': { order: 'desc' } }],
+      _source: [
+        'rule.level',
+        'rule.description',
+        'rule.id',
+        'rule.groups',
+        '@timestamp',
+        'predecoder.hostname',
+        'agent.name',
+        'agent.id',
+        'full_log',
+        'location',
+        'data.srcip'
+      ]
     };
 
-    const alertsResponse = await axiosInstance.post(
-      `${INDEXER_HOST}/wazuh-alerts*/_search`,
-      statsQuery,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          Authorization: `Basic ${authEncoded}`
+    const allHits = [];
+    let searchAfter = null;
+    let totalAlertCount = 0;
+    let batchNum = 0;
+
+    do {
+      const batchQuery = searchAfter ? { ...baseQuery, search_after: searchAfter } : baseQuery;
+      const alertsResponse = await axiosInstance.post(
+        `${INDEXER_HOST}/wazuh-alerts*/_search`,
+        batchQuery,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            Authorization: `Basic ${authEncoded}`
+          }
         }
+      );
+
+      const batchHits = alertsResponse.data.hits?.hits || [];
+      if (batchNum === 0) {
+        totalAlertCount = alertsResponse.data.hits?.total?.value || batchHits.length;
       }
-    );
+      batchNum++;
+      console.log(`  Fetching alerts batch ${batchNum} — got ${batchHits.length} hits (total: ${totalAlertCount})`);
 
-    const totalAlertCount = alertsResponse.data.hits?.total?.value || 0;
-    const aggs = alertsResponse.data.aggregations || {};
+      allHits.push(...batchHits);
 
-    // Build severity counts from aggregations
-    const severityBuckets = aggs.severity_ranges?.buckets || [];
-    const severityCounts = { critical: 0, major: 0, minor: 0, total: totalAlertCount };
-    severityBuckets.forEach(b => {
-      if (b.key === 'critical') severityCounts.critical = b.doc_count;
-      else if (b.key === 'major') severityCounts.major = b.doc_count;
-      else if (b.key === 'minor') severityCounts.minor = b.doc_count;
-    });
+      if (batchHits.length < BATCH_SIZE) break;
+      const lastHit = batchHits[batchHits.length - 1];
+      searchAfter = lastHit.sort;
+    } while (true);
 
-    // Build daily trend from aggregations
-    const dailyCounts = {};
-    (aggs.daily_trend?.buckets || []).forEach(b => {
-      if (b.doc_count > 0) dailyCounts[b.key_as_string] = b.doc_count;
-    });
-
-    // Build top alerts from aggregations
-    const topAlerts = (aggs.top_alerts?.buckets || []).map(b => {
-      const maxLevel = b.max_level?.value || 8;
-      return {
-        description: b.key,
-        severity: getSeverityLevel(maxLevel),
-        count: b.doc_count,
-        host: b.sample_host?.buckets?.[0]?.key || 'Unknown',
-        hosts_affected: b.unique_hosts?.value || 1,
-        last_seen: b.last_seen?.value_as_string
-          ? formatDateTime(new Date(b.last_seen.value_as_string))
-          : 'N/A'
-      };
-    });
-
-    // Build alert types from aggregations
-    const alertTypes = (aggs.alert_types?.buckets || []).map(b => ({
-      type: b.key,
-      count: b.doc_count
-    }));
-
-    // Map top raw hits as sample alerts (for any per-alert detail used in template)
-    const alerts = (alertsResponse.data.hits?.hits || []).map(hit => {
+    const alerts = allHits.map(hit => {
       const source = hit._source || {};
       return {
         alert_id: hit._id,
@@ -546,13 +343,14 @@ const generateReport = asyncHandler(async (req, res) => {
         rule_id: source.rule?.id,
         rule_groups: source.rule?.groups || [],
         timestamp: source['@timestamp'],
+        host_name: source.predecoder?.hostname,
         agent_name: source.agent?.name || 'Unknown',
         agent_id: source.agent?.id,
         srcip: source.data?.srcip
       };
     });
 
-    console.log(`✅ Fetched alert stats via aggregations — total: ${totalAlertCount}, critical: ${severityCounts.critical}, major: ${severityCounts.major}, minor: ${severityCounts.minor}`);
+    console.log(`✅ Fetched ${alerts.length} alerts (index total: ${totalAlertCount}) from Wazuh Indexer for ${organisationName}`);
     if (alerts.length > 0) {
       console.log(`   Sample alert: ${alerts[0].alert_description} (Severity: ${alerts[0].severity}, Time: ${alerts[0].timestamp})`);
     } else {
@@ -599,8 +397,74 @@ const generateReport = asyncHandler(async (req, res) => {
     const scaData = await fetchSCAData(WAZUH_HOST, token);
     console.log(`✅ SCA Data: Overall Score: ${scaData.overall_score}%, Total Checks: ${scaData.total_checks}, Agents with SCA: ${scaData.agents_sca?.length || 0}`);
 
-    // All statistics (severityCounts, topAlerts, alertTypes, dailyCounts) are already
-    // computed from OpenSearch aggregations above — no per-hit loop needed.
+    // Calculate statistics
+    const severityCounts = { critical: 0, major: 0, minor: 0, total: totalAlertCount };
+    const alertGroups = {};
+    const dailyCounts = {};
+    const agents = new Set();
+    const typeCounts = {};
+
+    alerts.forEach(alert => {
+      const level = alert.severity || 0;
+      const severity = getSeverityLevel(level);
+      severityCounts[severity]++;
+
+      // Group alerts
+      const desc = alert.alert_description || 'Unknown';
+      if (!alertGroups[desc]) {
+        alertGroups[desc] = {
+          count: 0,
+          description: desc,
+          severity: severity,
+          hosts: new Set(),
+          last_seen: null
+        };
+      }
+      alertGroups[desc].count++;
+      alertGroups[desc].hosts.add(alert.agent_name || 'Unknown');
+
+      if (alert.timestamp) {
+        const alertTime = new Date(alert.timestamp);
+        if (!alertGroups[desc].last_seen || alertTime > alertGroups[desc].last_seen) {
+          alertGroups[desc].last_seen = alertTime;
+        }
+
+        // Daily trend
+        const dateKey = alertTime.toISOString().split('T')[0];
+        dailyCounts[dateKey] = (dailyCounts[dateKey] || 0) + 1;
+      }
+
+      // Agents
+      if (alert.agent_name && alert.agent_name !== 'Unknown') {
+        agents.add(alert.agent_name);
+      }
+
+      // Alert types
+      const ruleGroups = alert.rule_groups || [];
+      if (Array.isArray(ruleGroups) && ruleGroups.length > 0) {
+        const primaryType = ruleGroups[0];
+        typeCounts[primaryType] = (typeCounts[primaryType] || 0) + 1;
+      }
+    });
+
+    // Top alerts
+    const topAlerts = Object.values(alertGroups)
+      .map(data => ({
+        description: data.description,
+        severity: data.severity,
+        count: data.count,
+        host: Array.from(data.hosts)[0] || 'Unknown',
+        hosts_affected: data.hosts.size,
+        last_seen: data.last_seen ? formatDateTime(data.last_seen) : 'N/A'
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    // Alert types
+    const alertTypes = Object.entries(typeCounts)
+      .map(([type, count]) => ({ type, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
 
     // Daily trend data
     const sortedDates = Object.keys(dailyCounts).sort();
@@ -636,8 +500,8 @@ const generateReport = asyncHandler(async (req, res) => {
       agents_list: agentsData.agents,
       cis_compliance: scaData,
       report_period: {
-        start_date: hasDateFilter ? formatDate(startDate, true) : 'All Time',
-        end_date: hasDateFilter ? formatDate(endDate, true) : null
+        start_date: formatDate(startDate, true),
+        end_date: formatDate(endDate, true)
       }
     };
 
@@ -673,10 +537,10 @@ const generateReport = asyncHandler(async (req, res) => {
     console.log('PDF generated successfully');
 
     // Generate time range string for filename
-    const formatDateForFilename = (date) => date.toISOString().split('T')[0];
-    const timeRangeStr = hasDateFilter
-      ? `${formatDateForFilename(startDate)}_to_${formatDateForFilename(endDate)}`
-      : 'all_time';
+    const formatDateForFilename = (date) => {
+      return date.toISOString().split('T')[0]; // YYYY-MM-DD
+    };
+    const timeRangeStr = `${formatDateForFilename(startDate)}_to_${formatDateForFilename(endDate)}`;
 
     // Generate filename in format: <orgName>_<reportType>_<timeRange>.pdf
     // SECURITY FIX: Sanitize all path components to prevent path traversal
@@ -724,7 +588,7 @@ const generateReport = asyncHandler(async (req, res) => {
       report_period_start: startDate,
       report_period_end: endDate,
       metadata: {
-        alerts_count: totalAlertCount,
+        alerts_count: alerts.length,
         severity_counts: severityCounts,
         agents_count: agentsData.total,
         sca_score: scaData.overall_score

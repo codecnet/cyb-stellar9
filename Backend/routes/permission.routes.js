@@ -1,5 +1,5 @@
 import express from 'express';
-import { createPermission, getAllPermissions, updatePermission, deletePermission } from '../controllers/permission.controller.js';
+import { createPermission, getAllPermissions, updatePermission, deletePermission, syncDefaultPermissions } from '../controllers/permission.controller.js';
 import { protect } from '../middlewares/auth.middleware.js';
 import hasPermission from '../middlewares/permission.middleware.js';
 
@@ -21,6 +21,9 @@ router.put('/update/:id', protect, hasPermission('permission:update'), updatePer
 
 // PATCH 2: Replace hardcoded isSuperAdmin with permission check
 router.delete('/delete/:id', protect, hasPermission('permission:delete'), deletePermission);
+
+// Sync default permissions (events-ingested, log-source-coverage, rules, ioc-list)
+router.post('/sync-defaults', protect, hasPermission('permission:create'), syncDefaultPermissions);
 
 export default router;
 

@@ -5,6 +5,7 @@ import { useClient } from '@/contexts/ClientContext'
 import { Shield, AlertTriangle, Clock, Activity, TrendingUp, CheckCircle } from 'lucide-react'
 import { ShieldExclamationIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import Cookies from 'js-cookie'
+import { subscribeToDataChanges } from '@/lib/alertsStream'
 
 const BASE_URL = process.env.NEXT_PUBLIC_RBAC_BASE_IP
 
@@ -68,6 +69,13 @@ export function SecurityMetrics() {
       fetchMetrics()
     }
   }, [selectedClient?.id, timePeriod])
+
+  // SSE: re-fetch immediately when backend detects alert data changed
+  useEffect(() => {
+    return subscribeToDataChanges(selectedClient?.id ?? null, () => {
+      if (selectedClient?.id) fetchMetrics()
+    })
+  }, [selectedClient?.id])
 
   const fetchMetrics = async () => {
     if (!selectedClient?.id) {

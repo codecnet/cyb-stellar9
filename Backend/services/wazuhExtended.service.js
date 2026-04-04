@@ -1,11 +1,12 @@
 import axios from 'axios';
 import https from 'https';
 
-// Axios instance with SSL verification disabled
+// Axios instance with SSL verification disabled and 30-second timeout
 const axiosInstance = axios.create({
   httpsAgent: new https.Agent({
     rejectUnauthorized: false,
   }),
+  timeout: 30000,
 });
 
 // No token caching - fetch fresh token every time
@@ -104,14 +105,14 @@ async function computeAverageComplianceScore(wazuhHost, wazuhUser, wazuhPass) {
     const token = await getWazuhToken(wazuhHost, wazuhUser, wazuhPass);
     const agentIds = await getActiveAgentIds(wazuhHost, token);
 
-    const scores = [];
+    // Fetch all agent SCA scores in parallel (not sequentially) to avoid timeouts
+    const results = await Promise.allSettled(
+      agentIds.map(agentId => getAgentScore(wazuhHost, token, agentId))
+    );
 
-    for (const agentId of agentIds) {
-      const score = await getAgentScore(wazuhHost, token, agentId);
-      if (score !== null) {
-        scores.push(score);
-      }
-    }
+    const scores = results
+      .filter(r => r.status === 'fulfilled' && r.value !== null)
+      .map(r => r.value);
 
     if (scores.length > 0) {
       const avgScore =

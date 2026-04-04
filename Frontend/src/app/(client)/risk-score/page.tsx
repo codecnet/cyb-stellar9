@@ -241,7 +241,9 @@ export default function RiskScorePage() {
   const load = useCallback(async () => {
     try {
       setError(null);
-      const data = await wazuhApi.getDashboardMetrics(orgId);
+      const raw = await wazuhApi.getDashboardMetrics(orgId);
+      // Backend wraps response in ApiResponse: { statusCode, data: {...}, message }
+      const data = raw?.data ?? raw;
       setMetrics({
         critical_alerts:  data.critical_alerts  ?? 0,
         major_alerts:     data.major_alerts     ?? 0,

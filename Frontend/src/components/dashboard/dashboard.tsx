@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useCallback, useState } from 'react'
 import { StatsOverview } from './stats-overview'
 import { SeverityDonut } from './severity-donut'
 import { AttackMap } from './attack-map'
@@ -13,6 +13,7 @@ import { useThreatData } from '../../contexts/ThreatDataContext'
 import { useClient } from '@/contexts/ClientContext'
 import Cookies from 'js-cookie';
 import { wazuhApi } from '@/lib/api'
+import { subscribeToDataChanges } from '@/lib/alertsStream'
 const BASE_URL = process.env.NEXT_PUBLIC_RBAC_BASE_IP
 
 export function Dashboard() {
@@ -29,82 +30,70 @@ export function Dashboard() {
     setIsClient(true);
   }, [])
 
-  useEffect(() => {
-    const fetchStats = async (isRetry = false) => {
-      try {
-        setIsLoading(true);
-        if (!isRetry) {
-          setError(null);
-          setRetryAttempt(0);
-        }
-
-        // Use Wazuh API with organization ID for client-specific data
-        const orgId = isClientMode && selectedClient?.id ? selectedClient.id : undefined;
-
-        // Fetch dashboard metrics, total events count, and total logs count in parallel
-        const [metricsResponse, totalEventsResponse, totalLogsResponse] = await Promise.all([
-          wazuhApi.getDashboardMetrics(orgId),
-          wazuhApi.getTotalEventsCount(orgId).catch(() => ({ data: { count: 0 } })),
-          wazuhApi.getTotalLogsCount(orgId).catch(() => ({ data: { count: 0 } }))
-        ]);
-
-        const metricsData = metricsResponse.data || metricsResponse;
-        const totalEvents = totalEventsResponse?.data?.count ?? 0;
-        const totalLogs = totalLogsResponse?.data?.count ?? 0;
-
-        // Calculate events/sec and logs/sec (based on 24 hours by default)
-        const secondsIn24Hours = 24 * 60 * 60;
-        const eventsPerSec = totalEvents / secondsIn24Hours;
-        const logsPerSec = totalLogs / secondsIn24Hours;
-
-        // Merge total events, total logs, and rates into stats data
-        setStatsData({
-          ...metricsData,
-          total_events: totalEvents,
-          total_logs: totalLogs,
-          events_per_sec: eventsPerSec,
-          logs_per_sec: logsPerSec
-        });
-        setLastUpdated(new Date().toLocaleString());
-
-        // Reset error state on successful fetch
+  const fetchStats = useCallback(async (isRetry = false) => {
+    try {
+      setIsLoading(true);
+      if (!isRetry) {
         setError(null);
         setRetryAttempt(0);
-      } catch (err: any) {
-        console.error('[✗] Error fetching dashboard metrics:', err);
-
-        // Use user-friendly error message from backend if available
-        const userMessage = err.response?.data?.userMessage ||
-                           err.response?.data?.error ||
-                           'Unable to fetch dashboard data. Please try again later.';
-        setError(userMessage);
-
-        // Implement automatic retry for transient errors
-        const isTransientError = err.response?.status >= 500 ||
-                                err.code === 'ECONNREFUSED' ||
-                                err.code === 'ETIMEDOUT' ||
-                                err.message.includes('timeout');
-
-        if (isTransientError && retryAttempt < 2) {
-          console.log(`🔄 Auto-retrying dashboard fetch (attempt ${retryAttempt + 1}/3) in 2s...`);
-          setRetryAttempt(prev => prev + 1);
-          setTimeout(() => fetchStats(true), 2000);
-        }
-
-        // Log detailed error for debugging
-        if (err.response?.status === 400 || err.response?.status === 404) {
-          console.error('Organization credentials issue:', err.response?.data?.error);
-        }
-      } finally {
-        setIsLoading(false);
       }
+
+      const orgId = isClientMode && selectedClient?.id ? selectedClient.id : undefined;
+
+      const [metricsResponse, totalEventsResponse, totalLogsResponse] = await Promise.all([
+        wazuhApi.getDashboardMetrics(orgId),
+        wazuhApi.getTotalEventsCount(orgId).catch(() => ({ data: { count: 0 } })),
+        wazuhApi.getTotalLogsCount(orgId).catch(() => ({ data: { count: 0 } }))
+      ]);
+
+      const metricsData = metricsResponse.data || metricsResponse;
+      const totalEvents = totalEventsResponse?.data?.count ?? 0;
+      const totalLogs = totalLogsResponse?.data?.count ?? 0;
+
+      const secondsIn24Hours = 24 * 60 * 60;
+      setStatsData({
+        ...metricsData,
+        total_events: totalEvents,
+        total_logs: totalLogs,
+        events_per_sec: totalEvents / secondsIn24Hours,
+        logs_per_sec: totalLogs / secondsIn24Hours
+      });
+      setLastUpdated(new Date().toLocaleString());
+      setError(null);
+      setRetryAttempt(0);
+    } catch (err: any) {
+      console.error('[✗] Error fetching dashboard metrics:', err);
+      const userMessage = err.response?.data?.userMessage ||
+                         err.response?.data?.error ||
+                         'Unable to fetch dashboard data. Please try again later.';
+      setError(userMessage);
+
+      const isTransientError = err.response?.status >= 500 ||
+                              err.code === 'ECONNREFUSED' ||
+                              err.code === 'ETIMEDOUT' ||
+                              err.message.includes('timeout');
+      if (isTransientError && retryAttempt < 2) {
+        setRetryAttempt(prev => prev + 1);
+        setTimeout(() => fetchStats(true), 2000);
+      }
+      if (err.response?.status === 400 || err.response?.status === 404) {
+        console.error('Organization credentials issue:', err.response?.data?.error);
+      }
+    } finally {
+      setIsLoading(false);
     }
+  }, [selectedClient?.id, isClientMode, retryAttempt]);
 
-    fetchStats() // initial fetch
-    const interval = setInterval(() => fetchStats(), 5000) // fetch every 5s
+  // Initial fetch + re-fetch when client/retry changes
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
 
-    return () => clearInterval(interval) // cleanup
-  }, [selectedClient?.id, isClientMode, retryAttempt]) // Re-fetch when selected client changes
+  // SSE: re-fetch immediately when backend detects data changed (replaces 5s polling)
+  useEffect(() => {
+    const orgId = isClientMode && selectedClient?.id ? selectedClient.id : null;
+    return subscribeToDataChanges(orgId, () => fetchStats());
+  }, [selectedClient?.id, isClientMode]);
 
   return (
     <div className="space-y-8">
@@ -195,7 +184,7 @@ export function Dashboard() {
       <GlobalThreatsDisplay className="w-full" />
 
       {/* Top 5 Risk Entities */}
-      <TopRiskEntities className="w-full" />git 
+      <TopRiskEntities className="w-full" />
 
       {/* Cybersecurity News Feed */}
       <CyberNews className="w-full" />

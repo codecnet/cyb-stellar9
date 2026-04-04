@@ -2,6 +2,9 @@ import Organisation from '../models/organisation.model.js';
 import { Ticket } from '../models/ticket.model.js';
 import { getAlertsService } from '../services/wazuhService.js';
 import { EncryptionUtils } from '../utils/security.util.js';
+import redisClient from '../config/redisClient.js';
+
+const CACHE_TTL = 900; // 15 minutes
 
 /**
  * Get Security Metrics Dashboard Data
@@ -21,6 +24,21 @@ export const getSecurityMetrics = async (req, res) => {
         success: false,
         message: 'Organisation ID is required'
       });
+    }
+
+    // Check Redis cache
+    const cacheKey = `security_metrics:${organisation_id}:${time_period_hours}`;
+    try {
+      const cached = await redisClient.get(cacheKey);
+      if (cached) {
+        console.log('[SECURITY METRICS] Cache HIT');
+        res.setHeader('X-Cache', 'HIT');
+        return res.json(JSON.parse(cached));
+      }
+      console.log('[SECURITY METRICS] Cache MISS - fetching from Wazuh + DB...');
+      res.setHeader('X-Cache', 'MISS');
+    } catch {
+      console.warn('[SECURITY METRICS] Redis unavailable, continuing without cache');
     }
 
     console.log('📊 [SECURITY METRICS] Fetching data for organisation:', organisation_id);
@@ -239,10 +257,16 @@ export const getSecurityMetrics = async (req, res) => {
 
     console.log('✅ [SECURITY METRICS] Metrics calculated successfully');
 
-    res.json({
-      success: true,
-      data: metrics
-    });
+    const responseData = { success: true, data: metrics };
+
+    // Cache for 15 minutes
+    try {
+      await redisClient.setEx(cacheKey, CACHE_TTL, JSON.stringify(responseData));
+    } catch {
+      console.warn('[SECURITY METRICS] Failed to set cache');
+    }
+
+    res.json(responseData);
 
   } catch (error) {
     console.error('❌ [SECURITY METRICS] Error:', error);

@@ -10,10 +10,13 @@ import {
   TrashIcon,
   PencilIcon,
   EyeIcon,
-  XMarkIcon
+  XMarkIcon,
+  ArrowPathIcon,
+  CheckCircleIcon
 } from '@heroicons/react/24/outline';
 import { clsx } from 'clsx';
 import { Role, Permission } from '../types';
+import Cookies from 'js-cookie';
 
 import RoleForm from '../modal/RoleForm';
 import PermissionForm from '../modal/PermissionForm';
@@ -34,6 +37,8 @@ export default function AccessControl({
   const [activeTab, setActiveTab] = useState('roles');
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ created: string[]; skipped: string[] } | null>(null);
 
   // Tab configuration
   const tabs = [
@@ -49,6 +54,33 @@ export default function AccessControl({
   const handleEdit = (item: any) => {
     setEditingItem(item);
     setShowModal(true);
+  };
+
+  const handleSyncPermissions = async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const token = Cookies.get('auth_token');
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/permissions/sync-defaults`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.message || 'Sync failed');
+      setSyncResult({ created: result.created || [], skipped: result.skipped || [] });
+      // Refresh permissions list if new ones were created
+      if ((result.created || []).length > 0) {
+        const permResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/permissions/all`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        const permData = await permResponse.json();
+        if (permData.data) onPermissionsChange(permData.data);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to sync permissions');
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const handleDelete = async (type: string, id: string | number) => {
@@ -150,16 +182,48 @@ export default function AccessControl({
 
   const renderPermissions = () => (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-wrap justify-between items-center gap-3">
         <h4 className="text-lg font-medium text-gray-900 dark:text-white">Permissions</h4>
-        <button
-          onClick={() => handleAdd('permission')}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-        >
-          <PlusIcon className="h-4 w-4" />
-          Add Permission
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSyncPermissions}
+            disabled={syncing}
+            title="Add default permissions for Events Ingested, Log Source Coverage, Rules, and IOC List"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <ArrowPathIcon className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Syncing…' : 'Sync Default Permissions'}
+          </button>
+          <button
+            onClick={() => handleAdd('permission')}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+          >
+            <PlusIcon className="h-4 w-4" />
+            Add Permission
+          </button>
+        </div>
       </div>
+
+      {syncResult && (
+        <div className="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-4">
+          <div className="flex items-start gap-3">
+            <CheckCircleIcon className="h-5 w-5 text-emerald-600 dark:text-emerald-400 mt-0.5 flex-shrink-0" />
+            <div className="text-sm text-emerald-800 dark:text-emerald-300">
+              <p className="font-semibold mb-1">
+                Sync complete — {syncResult.created.length} created, {syncResult.skipped.length} already existed
+              </p>
+              {syncResult.created.length > 0 && (
+                <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                  Added: {syncResult.created.join(', ')}
+                </p>
+              )}
+            </div>
+            <button onClick={() => setSyncResult(null)} className="ml-auto text-emerald-600 dark:text-emerald-400 hover:text-emerald-800">
+              <XMarkIcon className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {permissions.map((permission) => (

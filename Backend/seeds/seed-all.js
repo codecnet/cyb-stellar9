@@ -381,6 +381,98 @@ const SEED_CONFIG = {
       description: "View risk matrix",
     },
 
+    // Events Ingested
+    {
+      resource: "events-ingested",
+      action: "read",
+      category: "security",
+      description: "View event ingestion data and statistics",
+    },
+    {
+      resource: "events-ingested",
+      action: "access",
+      category: "security",
+      description: "Access the Events Ingested page",
+    },
+
+    // Log Source Coverage
+    {
+      resource: "log-source-coverage",
+      action: "read",
+      category: "security",
+      description: "View log source coverage and agent log statistics",
+    },
+    {
+      resource: "log-source-coverage",
+      action: "access",
+      category: "security",
+      description: "Access the Log Source Coverage page",
+    },
+
+    // Rules Management
+    {
+      resource: "rules",
+      action: "read",
+      category: "security",
+      description: "View security detection rules",
+    },
+    {
+      resource: "rules",
+      action: "create",
+      category: "security",
+      description: "Create new security detection rules",
+    },
+    {
+      resource: "rules",
+      action: "update",
+      category: "security",
+      description: "Update existing security detection rules",
+    },
+    {
+      resource: "rules",
+      action: "delete",
+      category: "security",
+      description: "Delete security detection rules",
+    },
+    {
+      resource: "rules",
+      action: "manage",
+      category: "security",
+      description: "Full management of security detection rules",
+    },
+
+    // IOC List Management
+    {
+      resource: "ioc-list",
+      action: "read",
+      category: "security",
+      description: "View IOC (Indicator of Compromise) lists",
+    },
+    {
+      resource: "ioc-list",
+      action: "create",
+      category: "security",
+      description: "Create new IOC list entries",
+    },
+    {
+      resource: "ioc-list",
+      action: "update",
+      category: "security",
+      description: "Update existing IOC list entries",
+    },
+    {
+      resource: "ioc-list",
+      action: "delete",
+      category: "security",
+      description: "Delete IOC list entries",
+    },
+    {
+      resource: "ioc-list",
+      action: "manage",
+      category: "security",
+      description: "Full management of IOC lists including import/export",
+    },
+
     // Settings
     {
       resource: "settings",

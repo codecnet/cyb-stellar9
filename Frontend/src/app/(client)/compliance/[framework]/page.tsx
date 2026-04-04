@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams, useRouter } from 'next/navigation'
 import { useClient } from '@/contexts/ClientContext'
 import { usePermissions } from '@/hooks/usePermissions'
 import { organisationsApi } from '@/lib/api'
 import Cookies from 'js-cookie'
+import { subscribeToDataChanges } from '@/lib/alertsStream'
 import {
   ArrowLeftIcon,
   ArrowDownTrayIcon,
@@ -279,7 +280,7 @@ export default function FrameworkDetailPage() {
   // Memoize client ID to prevent unnecessary re-renders
   const clientId = useMemo(() => selectedClient?.id || null, [selectedClient?.id])
 
-  useEffect(() => {
+  const fetchComplianceData = useCallback(async () => {
     if (!framework) {
       router.push('/compliance')
       return
@@ -294,75 +295,77 @@ export default function FrameworkDetailPage() {
       return
     }
 
-    const fetchComplianceData = async () => {
-      try {
-        setLoading(true)
-        setError(null)
+    try {
+      setLoading(true)
+      setError(null)
 
-        // Map frontend framework IDs to backend IDs
-        const backendFrameworkId = frameworkId === 'pci-dss' ? 'pci_dss' :
-                                  frameworkId === 'nist-800-53' ? 'nist_800_53' :
-                                  frameworkId === 'iso27001' ? 'iso27001' :
-                                  frameworkId
+      const backendFrameworkId = frameworkId === 'pci-dss' ? 'pci_dss' :
+                                frameworkId === 'nist-800-53' ? 'nist_800_53' :
+                                frameworkId === 'iso27001' ? 'iso27001' :
+                                frameworkId
 
-        // Build URL with time parameters
-        const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000/api/v1'
-        let url = `${baseUrl}/wazuh/compliance/${backendFrameworkId}?_t=${Date.now()}`
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:4000/api/v1'
+      let url = `${baseUrl}/wazuh/compliance/${backendFrameworkId}?_t=${Date.now()}`
 
-        if (timeRangeType === 'relative' && relativeHours > 0) {
-          url += `&hours=${relativeHours}`
-        } else if (timeRangeType === 'absolute') {
-          url += `&from=${encodeURIComponent(new Date(fromDate).toISOString())}&to=${encodeURIComponent(new Date(toDate).toISOString())}`
-        }
-
-        const orgId = isClientMode && selectedClient?.id ? selectedClient.id : undefined
-        if (orgId) url += `&orgId=${orgId}`
-
-        console.log('Fetching compliance data for:', backendFrameworkId)
-
-        const token = Cookies.get('auth_token')
-        const response = await fetch(url, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        })
-
-        // Check cache status from response header
-        const xCacheHeader = response.headers.get('X-Cache')
-        setCacheStatus({
-          cached: xCacheHeader === 'HIT',
-          timestamp: xCacheHeader === 'HIT' ? new Date().toLocaleTimeString() : null
-        })
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
-
-        const result = await response.json()
-
-        if (result.success && result.data) {
-          console.log(`Received compliance data: ${result.data.total} requirements (Cache: ${xCacheHeader || 'N/A'})`)
-          setRequirements(result.data.requirements || [])
-          setComplianceStats({
-            total: result.data.total || 0,
-            compliant: result.data.compliant || 0,
-            nonCompliant: result.data.nonCompliant || 0
-          })
-        }
-
-        // Also fetch Wazuh host for current client
-        getWazuhHost(clientId, isClientMode).then(setWazuhHost)
-      } catch (err) {
-        console.error('Failed to fetch compliance data:', err)
-        setError(err instanceof Error ? err.message : 'Failed to load compliance data')
-      } finally {
-        setLoading(false)
+      if (timeRangeType === 'relative' && relativeHours > 0) {
+        url += `&hours=${relativeHours}`
+      } else if (timeRangeType === 'absolute') {
+        url += `&from=${encodeURIComponent(new Date(fromDate).toISOString())}&to=${encodeURIComponent(new Date(toDate).toISOString())}`
       }
-    }
 
+      const orgId = isClientMode && selectedClient?.id ? selectedClient.id : undefined
+      if (orgId) url += `&orgId=${orgId}`
+
+      console.log('Fetching compliance data for:', backendFrameworkId)
+
+      const token = Cookies.get('auth_token')
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      const xCacheHeader = response.headers.get('X-Cache')
+      setCacheStatus({
+        cached: xCacheHeader === 'HIT',
+        timestamp: xCacheHeader === 'HIT' ? new Date().toLocaleTimeString() : null
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const result = await response.json()
+
+      if (result.success && result.data) {
+        console.log(`Received compliance data: ${result.data.total} requirements (Cache: ${xCacheHeader || 'N/A'})`)
+        setRequirements(result.data.requirements || [])
+        setComplianceStats({
+          total: result.data.total || 0,
+          compliant: result.data.compliant || 0,
+          nonCompliant: result.data.nonCompliant || 0
+        })
+      }
+
+      getWazuhHost(clientId, isClientMode).then(setWazuhHost)
+    } catch (err) {
+      console.error('Failed to fetch compliance data:', err)
+      setError(err instanceof Error ? err.message : 'Failed to load compliance data')
+    } finally {
+      setLoading(false)
+    }
+  }, [framework, router, frameworkId, timeRangeType, relativeHours, fromDate, toDate, clientId, isClientMode, selectedClient?.id])
+
+  useEffect(() => {
     fetchComplianceData()
-  }, [framework, router, frameworkId, timeRangeType, relativeHours, clientId, isClientMode])
+  }, [fetchComplianceData])
+
+  // SSE: re-fetch immediately when backend detects alert data changed
+  useEffect(() => {
+    const orgId = isClientMode && selectedClient?.id ? selectedClient.id : null
+    return subscribeToDataChanges(orgId, fetchComplianceData)
+  }, [selectedClient?.id, isClientMode])
 
   // Early return check for framework
   if (!framework) {

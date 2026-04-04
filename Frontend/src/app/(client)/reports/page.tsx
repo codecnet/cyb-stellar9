@@ -588,7 +588,7 @@ export default function ReportsPage() {
       month: 'short',
       day: 'numeric'
     })
-    const orgName = selectedClient?.name || selectedClient?.organisation_name || 'Organization'
+    const orgName = selectedClient?.name || selectedClient?.organisation_name || 'Codec Networks'
 
     // Generate time range description for report name
     let timeRangeDesc = 'All Time'
@@ -1023,7 +1023,7 @@ export default function ReportsPage() {
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
             <p className="text-sm text-blue-800 dark:text-blue-200">
               <strong>Report Name:</strong> Will be auto-generated as: <br />
-              <span className="font-mono text-xs">{selectedClient?.name || selectedClient?.organisation_name || 'Organization'} - [Template] - [Time Range] - [Date]</span>
+              <span className="font-mono text-xs">{selectedClient?.name || selectedClient?.organisation_name || 'Codec Networks'} - [Template] - [Time Range] - [Date]</span>
             </p>
           </div>
 

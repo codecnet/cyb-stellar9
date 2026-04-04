@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { wazuhApi } from '@/lib/api';
 import { useClient } from '@/contexts/ClientContext';
 import { ClockIcon } from '@heroicons/react/24/outline';
+import { subscribeToDataChanges } from '@/lib/alertsStream';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -261,8 +262,10 @@ export function RiskScore({ className = '' }: RiskScoreProps) {
       const orgId = isClientMode && selectedClient?.id ? selectedClient.id : undefined;
       
       // Note: You may need to update your API to support hours parameter
-      const data = await wazuhApi.getDashboardMetrics(orgId);
-      
+      const raw = await wazuhApi.getDashboardMetrics(orgId);
+      // Backend wraps response in ApiResponse: { statusCode, data: {...}, message }
+      const data = raw?.data ?? raw;
+
       setMetrics({
         critical_alerts: data.critical_alerts ?? 0,
         major_alerts: data.major_alerts ?? 0,
@@ -280,12 +283,16 @@ export function RiskScore({ className = '' }: RiskScoreProps) {
     }
   }, [selectedClient?.id, isClientMode]);
 
+  // Initial fetch + re-fetch when fetchData reference changes (client/org switch)
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 60000); // Refresh every minute
-
-    return () => clearInterval(interval);
   }, [fetchData]);
+
+  // SSE: re-fetch when backend detects data changed (replaces 60s polling)
+  useEffect(() => {
+    const orgId = isClientMode && selectedClient?.id ? selectedClient.id : null;
+    return subscribeToDataChanges(orgId, fetchData);
+  }, [selectedClient?.id, isClientMode]);
 
   const { score, factors } = metrics
     ? computeRiskScore(metrics)

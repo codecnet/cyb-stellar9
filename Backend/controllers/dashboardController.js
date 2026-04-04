@@ -4,6 +4,9 @@ import {
   getAlertsService,
   refreshCacheService
 } from '../services/wazuhService.js';
+import redisClient from '../config/redisClient.js';
+
+const CACHE_TTL = 900; // 15 minutes
 
 export const getDashboardMetrics = async (req, res) => {
   try {
@@ -23,9 +26,31 @@ export const getDashboardMetrics = async (req, res) => {
       });
     }
 
-    console.log(`🔍 Dashboard metrics: Fetching data for org ${req.clientCreds.organizationId}`);
+    const orgId = req.clientCreds.organizationId;
+    const cacheKey = `dashboard_metrics:${orgId}`;
+
+    try {
+      const cached = await redisClient.get(cacheKey);
+      if (cached) {
+        console.log(`[DASHBOARD METRICS] Cache HIT: ${orgId}`);
+        res.setHeader('X-Cache', 'HIT');
+        return res.json(JSON.parse(cached));
+      }
+      res.setHeader('X-Cache', 'MISS');
+    } catch {
+      console.warn('[DASHBOARD METRICS] Redis unavailable, continuing without cache');
+    }
+
+    console.log(`🔍 Dashboard metrics: Fetching data for org ${orgId}`);
     const data = await getDashboardMetricsService(req.clientCreds);
-    console.log(`✅ Dashboard metrics: Successfully fetched data for org ${req.clientCreds.organizationId}`);
+    console.log(`✅ Dashboard metrics: Successfully fetched data for org ${orgId}`);
+
+    try {
+      await redisClient.setEx(cacheKey, CACHE_TTL, JSON.stringify(data));
+    } catch {
+      console.warn('[DASHBOARD METRICS] Failed to set cache');
+    }
+
     res.json(data);
   } catch (err) {
     console.error(`❌ Dashboard metrics error for org ${req.clientCreds?.organizationId}:`, err.message);
@@ -69,7 +94,29 @@ export const getAgentsSummary = async (req, res) => {
       });
     }
 
+    const orgId = req.clientCreds.organizationId;
+    const cacheKey = `agents_summary:${orgId}`;
+
+    try {
+      const cached = await redisClient.get(cacheKey);
+      if (cached) {
+        console.log(`[AGENTS SUMMARY] Cache HIT: ${orgId}`);
+        res.setHeader('X-Cache', 'HIT');
+        return res.json(JSON.parse(cached));
+      }
+      res.setHeader('X-Cache', 'MISS');
+    } catch {
+      console.warn('[AGENTS SUMMARY] Redis unavailable, continuing without cache');
+    }
+
     const data = await getAgentsSummaryService(req.clientCreds);
+
+    try {
+      await redisClient.setEx(cacheKey, CACHE_TTL, JSON.stringify(data));
+    } catch {
+      console.warn('[AGENTS SUMMARY] Failed to set cache');
+    }
+
     res.json(data);
   } catch (err) {
     console.error(`❌ Agents summary error for org ${req.clientCreds?.organizationId}:`, err.message);
@@ -111,11 +158,32 @@ export const getAlerts = async (req, res) => {
 
     const { severity = 8, size = 500, lastMinutes } = req.query;
 
+    const orgId = req.clientCreds.organizationId;
+    const cacheKey = `dashboard_alerts:${orgId}:${severity}:${size}:${lastMinutes || 'all'}`;
+
+    try {
+      const cached = await redisClient.get(cacheKey);
+      if (cached) {
+        console.log(`[DASHBOARD ALERTS] Cache HIT: ${orgId}`);
+        res.setHeader('X-Cache', 'HIT');
+        return res.json(JSON.parse(cached));
+      }
+      res.setHeader('X-Cache', 'MISS');
+    } catch {
+      console.warn('[DASHBOARD ALERTS] Redis unavailable, continuing without cache');
+    }
+
     const data = await getAlertsService(req.clientCreds.indexerCredentials, {
       severity: parseInt(severity),
       size: parseInt(size),
       lastMinutes: lastMinutes ? parseInt(lastMinutes) : undefined
-    }, req.clientCreds.organizationId);
+    }, orgId);
+
+    try {
+      await redisClient.setEx(cacheKey, CACHE_TTL, JSON.stringify(data));
+    } catch {
+      console.warn('[DASHBOARD ALERTS] Failed to set cache');
+    }
 
     res.json(data);
   } catch (err) {
