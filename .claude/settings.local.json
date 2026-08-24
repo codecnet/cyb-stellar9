@@ -6,7 +6,25 @@
       "Bash(npm install:*)",
       "WebFetch(domain:documentation.wazuh.com)",
       "WebFetch(domain:blusapphire.ai)",
-      "WebFetch(domain:docs.blusapphire.io)"
+      "WebFetch(domain:docs.blusapphire.io)",
+      "Read(//tmp/**)",
+      "Bash(kill 28080)",
+      "Bash(npm run *)",
+      "Bash(echo \"Started PID: $!\")",
+      "Bash(curl -s http://localhost:3000/login)",
+      "Bash(curl -sI http://localhost:3000/cyb-logo.svg)",
+      "Bash(netstat -tlnp)",
+      "Bash(curl -sI https://cyb.stellar9.biz/_next/static/chunks/app/login/page-ad08829619d0df86.js)",
+      "Bash(curl -sI https://cyb.stellar9.biz/cyb-logo.svg)",
+      "Bash(curl -sI http://localhost:3000/_next/static/chunks/app/login/page-ad08829619d0df86.js)",
+      "Bash(curl -s http://localhost:3000/_next/static/chunks/app/login/page-ad08829619d0df86.js)",
+      "Bash(awk '$2==24157 || $3==24157')",
+      "Bash(pm2 list *)",
+      "Bash(pstree -p 24157)",
+      "Bash(pm2 restart *)",
+      "Bash(curl -s https://cyb.stellar9.biz/login)",
+      "Bash(curl -sI http://localhost:3000/cyb-logo.png)",
+      "Bash(curl -sI http://localhost:3000/login)"
     ]
   }
 }

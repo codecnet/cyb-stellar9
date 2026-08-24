@@ -100,7 +100,40 @@ async function getAgentScore(wazuhHost, token, agentId) {
 /**
  * Compute average compliance score across all agents
  */
+// SCA-derived compliance is expensive to compute: it makes one API call per
+// active agent (~30s for 47 agents). The underlying SCA scans run on a schedule,
+// so the value barely moves minute to minute. Cache it per manager with
+// stale-while-revalidate so no request ever waits on a full recompute.
+const _complianceCache = new Map();
+const COMPLIANCE_TTL_MS = 10 * 60 * 1000;
+
 async function computeAverageComplianceScore(wazuhHost, wazuhUser, wazuhPass) {
+  const key = `${wazuhHost}|${wazuhUser}`;
+  const now = Date.now();
+  const hit = _complianceCache.get(key);
+
+  if (hit) {
+    if (hit.expires > now) return hit.value;
+    // Stale: return the previous value immediately, refresh in the background.
+    if (!hit.refreshing) {
+      hit.refreshing = true;
+      _computeComplianceUncached(wazuhHost, wazuhUser, wazuhPass)
+        .then((v) => {
+          if (v > 0) _complianceCache.set(key, { value: v, expires: Date.now() + COMPLIANCE_TTL_MS });
+        })
+        .catch(() => {})
+        .finally(() => { hit.refreshing = false; });
+    }
+    return hit.value;
+  }
+
+  const value = await _computeComplianceUncached(wazuhHost, wazuhUser, wazuhPass);
+  // Only cache real results - a transient 0 must not stick for the whole TTL.
+  if (value > 0) _complianceCache.set(key, { value, expires: now + COMPLIANCE_TTL_MS });
+  return value;
+}
+
+async function _computeComplianceUncached(wazuhHost, wazuhUser, wazuhPass) {
   try {
     const token = await getWazuhToken(wazuhHost, wazuhUser, wazuhPass);
     const agentIds = await getActiveAgentIds(wazuhHost, token);

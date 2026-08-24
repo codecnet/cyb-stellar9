@@ -42,15 +42,39 @@ const TIME_RANGE_OPTIONS = [
 
 // ── Risk score calculation ────────────────────────────────────────────────────
 
-function computeRiskScore(m: Metrics): { score: number; factors: Factor[] } {
-  const compliance = parseFloat(m.compliance_score) || 0;
+const windowText = (h: number) =>
+  (TIME_RANGE_OPTIONS.find(o => o.value === h)?.label ?? `Last ${h} Hours`).toLowerCase();
 
-  const critPts = Math.min((m.critical_alerts / 5) * 35, 35);
-  const majPts  = Math.min((m.major_alerts / 20) * 25, 25);
-  const minPts  = Math.min((m.minor_alerts / 100) * 10, 10);
-  const compPts = ((100 - compliance) / 100) * 30;
+// Risk thresholds expressed as a PER-DAY alert rate, not an absolute count.
+// Counts from the selected window are normalised to a 24h equivalent before
+// scoring, so the score stays comparable across time ranges instead of pinning
+// every factor to its cap on anything longer than a day.
+//
+// Calibrated against MMAD's trailing-30d baseline (median per day: 3 critical,
+// 22 major, 1 minor; p95: 15 / 795 / 21). A tenant whose normal volume differs
+// materially should have these retuned - they are a policy choice, not a constant.
+const DAILY_MAX = { critical: 27, major: 870, minor: 60 };
 
-  const total = Math.min(Math.round(critPts + majPts + minPts + compPts), 100);
+// Ceiling on the composite score. Calibrated against MMAD's trailing-31d actuals
+// so that routine operation stays below 5.0 and a confirmed attack (e.g. the
+// 2026-08-12 firewall brute-force burst: 16 critical / 867 major) surfaces at
+// 6-7, without noise ever pinning the gauge at 10.
+const SCORE_CAP = 70;
+
+function computeRiskScore(
+  m: Metrics,
+  win = 'last 24 hours',
+  hours = 24,
+): { score: number; factors: Factor[] } {
+  // 'All Time' (hours === 0) has no fixed span; treat it as a 30-day window.
+  const spanHours = hours > 0 ? hours : 720;
+  const perDay = (n: number) => (n * 24) / spanHours;
+
+  const critPts = Math.min((perDay(m.critical_alerts) / DAILY_MAX.critical) * 50, 50);
+  const majPts  = Math.min((perDay(m.major_alerts)    / DAILY_MAX.major)    * 36, 36);
+  const minPts  = Math.min((perDay(m.minor_alerts)    / DAILY_MAX.minor)    * 14, 14);
+
+  const total = Math.min(Math.round(critPts + majPts + minPts), SCORE_CAP);
 
   const sev = (v: number, max: number): Factor['severity'] => {
     const p = v / max;
@@ -63,18 +87,15 @@ function computeRiskScore(m: Metrics): { score: number; factors: Factor[] } {
   return {
     score: total,
     factors: [
-      { label: 'Critical Alerts', value: Math.round(critPts), maxValue: 35,
-        description: `${m.critical_alerts} critical alert${m.critical_alerts !== 1 ? 's' : ''} in last 24 h`,
-        severity: sev(critPts, 35) },
-      { label: 'Major Alerts',    value: Math.round(majPts),  maxValue: 25,
-        description: `${m.major_alerts} major alert${m.major_alerts !== 1 ? 's' : ''} in last 24 h`,
-        severity: sev(majPts, 25) },
-      { label: 'Minor Alerts',    value: Math.round(minPts),  maxValue: 10,
-        description: `${m.minor_alerts} minor alert${m.minor_alerts !== 1 ? 's' : ''} in last 24 h`,
-        severity: sev(minPts, 10) },
-      { label: 'Compliance Gap',  value: Math.round(compPts), maxValue: 30,
-        description: `Compliance score: ${compliance}%`,
-        severity: sev(compPts, 30) },
+      { label: 'Critical Alerts', value: Math.round(critPts), maxValue: 50,
+        description: `${m.critical_alerts} critical alert${m.critical_alerts !== 1 ? 's' : ''} in ${win}`,
+        severity: sev(critPts, 50) },
+      { label: 'Major Alerts',    value: Math.round(majPts),  maxValue: 36,
+        description: `${m.major_alerts} major alert${m.major_alerts !== 1 ? 's' : ''} in ${win}`,
+        severity: sev(majPts, 36) },
+      { label: 'Minor Alerts',    value: Math.round(minPts),  maxValue: 14,
+        description: `${m.minor_alerts} minor alert${m.minor_alerts !== 1 ? 's' : ''} in ${win}`,
+        severity: sev(minPts, 14) },
     ],
   };
 }
@@ -261,8 +282,7 @@ export function RiskScore({ className = '' }: RiskScoreProps) {
 
       const orgId = isClientMode && selectedClient?.id ? selectedClient.id : undefined;
       
-      // Note: You may need to update your API to support hours parameter
-      const raw = await wazuhApi.getDashboardMetrics(orgId);
+      const raw = await wazuhApi.getDashboardMetrics(orgId, selectedHours);
       // Backend wraps response in ApiResponse: { statusCode, data: {...}, message }
       const data = raw?.data ?? raw;
 
@@ -281,7 +301,7 @@ export function RiskScore({ className = '' }: RiskScoreProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedClient?.id, isClientMode]);
+  }, [selectedClient?.id, isClientMode, selectedHours]);
 
   // Initial fetch + re-fetch when fetchData reference changes (client/org switch)
   useEffect(() => {
@@ -295,18 +315,18 @@ export function RiskScore({ className = '' }: RiskScoreProps) {
   }, [selectedClient?.id, isClientMode]);
 
   const { score, factors } = metrics
-    ? computeRiskScore(metrics)
+    ? computeRiskScore(metrics, windowText(selectedHours), selectedHours)
     : { score: 0, factors: [] as Factor[] };
 
   const level = getLevel(score);
 
   if (isLoading && !metrics) {
     return (
-      <div className={`bg-gray-800 rounded-lg p-6 border border-gray-700 ${className}`}>
+      <div className={`bg-blue-50 rounded-lg p-6 border border-blue-200 ${className}`}>
         <div className="flex items-center justify-center h-96">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-500 mx-auto"></div>
-            <p className="text-gray-300 mt-2">Loading risk score...</p>
+            <p className="text-slate-600 mt-2">Loading risk score...</p>
           </div>
         </div>
       </div>
@@ -315,13 +335,13 @@ export function RiskScore({ className = '' }: RiskScoreProps) {
 
   if (error) {
     return (
-      <div className={`bg-gray-800 rounded-lg p-6 border border-red-700 ${className}`}>
+      <div className={`bg-blue-50 rounded-lg p-6 border border-red-300 ${className}`}>
         <div className="flex items-center justify-center h-96">
           <div className="text-center">
-            <svg className="w-8 h-8 text-red-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-8 h-8 text-red-600 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 18.5c-.77.833.192 2.5 1.732 2.5z" />
             </svg>
-            <p className="text-red-400">{error}</p>
+            <p className="text-red-600">{error}</p>
           </div>
         </div>
       </div>
@@ -330,10 +350,8 @@ export function RiskScore({ className = '' }: RiskScoreProps) {
 
   return (
     <div className={`relative overflow-hidden ${className}`}>
-      {/* Modern glass-morphism container */}
-      <div className="bg-gradient-to-br from-gray-900/95 to-gray-800/95 backdrop-blur-xl rounded-2xl border border-gray-600/30 shadow-2xl">
-        {/* Subtle gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-purple-500/5 rounded-2xl"></div>
+      {/* Light card container */}
+      <div className="bg-gradient-to-br from-white via-white to-blue-50/40 rounded-2xl border border-slate-200/70 shadow-[0_2px_12px_-4px_rgba(15,23,42,0.08)]">
 
         <div className="relative p-8">
           {/* Header */}
@@ -347,10 +365,10 @@ export function RiskScore({ className = '' }: RiskScoreProps) {
               </div>
 
               <div>
-                <h3 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                <h3 className="text-2xl font-bold text-slate-900">
                   Organization Risk Score
                 </h3>
-                <p className="text-sm text-gray-400 mt-1">Real-time security posture — alerts & compliance</p>
+                <p className="text-sm text-slate-500 mt-1">Real-time security posture — alerts & compliance</p>
               </div>
 
               {/* Risk Level Badge */}
@@ -366,15 +384,15 @@ export function RiskScore({ className = '' }: RiskScoreProps) {
 
             <div className="flex items-center gap-3">
               {/* Time Range Filter */}
-              <div className="flex items-center gap-2 bg-gray-800/60 rounded-lg px-3 py-2 border border-gray-700/50">
-                <ClockIcon className="h-4 w-4 text-gray-400" />
+              <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 border border-blue-200">
+                <ClockIcon className="h-4 w-4 text-slate-500" />
                 <select
                   value={selectedHours}
                   onChange={(e) => setSelectedHours(parseInt(e.target.value))}
-                  className="bg-transparent text-sm text-gray-300 border-none outline-none cursor-pointer focus:ring-0"
+                  className="bg-transparent text-sm text-slate-600 border-none outline-none cursor-pointer focus:ring-0"
                 >
                   {TIME_RANGE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value} className="bg-gray-800 text-gray-300">
+                    <option key={option.value} value={option.value} className="bg-white text-slate-700">
                       {option.label}
                     </option>
                   ))}
@@ -382,7 +400,7 @@ export function RiskScore({ className = '' }: RiskScoreProps) {
               </div>
 
               {lastUpdated && (
-                <span className="text-xs text-gray-400">
+                <span className="text-xs text-slate-500">
                   Updated {lastUpdated.toLocaleTimeString()}
                 </span>
               )}
@@ -395,19 +413,18 @@ export function RiskScore({ className = '' }: RiskScoreProps) {
 
           {/* Business-impact-style top cards */}
           {metrics && (
-            <div className="mb-6 bg-gray-800/50 rounded-xl border border-gray-700/50 px-6 py-4">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+            <div className="mb-6 bg-blue-100/80 rounded-xl border border-blue-200 px-6 py-4">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
                 Security Metrics
               </p>
-              <div className="grid grid-cols-3 divide-x divide-gray-700">
+              <div className="grid grid-cols-2 divide-x divide-blue-200">
                 {[
-                  { value: String(metrics.alerts_last_24hr ?? 0), label: 'Alerts (24 h)' },
+                  { value: String(metrics.alerts_last_24hr ?? 0), label: `Alerts (${windowText(selectedHours)})` },
                   { value: String(metrics.active_agents), label: 'Active Agents' },
-                  { value: metrics.compliance_score, label: 'Compliance' },
                 ].map(item => (
                   <div key={item.label} className="px-6 first:pl-0 last:pr-0">
-                    <div className="text-2xl font-bold text-white">{item.value}</div>
-                    <div className="text-xs text-gray-400 mt-0.5">{item.label}</div>
+                    <div className="text-2xl font-bold text-slate-900">{item.value}</div>
+                    <div className="text-xs text-slate-500 mt-0.5">{item.label}</div>
                   </div>
                 ))}
               </div>
@@ -417,20 +434,20 @@ export function RiskScore({ className = '' }: RiskScoreProps) {
           {/* Gauge + breakdown */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
             {/* Gauge card */}
-            <div className="lg:col-span-2 bg-gray-800/50 rounded-xl border border-gray-700/50 p-5 flex flex-col items-center gap-3">
+            <div className="lg:col-span-2 bg-blue-100/80 rounded-xl border border-blue-200 p-5 flex flex-col items-center gap-3">
               <div className="self-start flex items-center justify-between w-full">
-                <span className="text-sm font-semibold text-gray-300">
+                <span className="text-sm font-semibold text-slate-600">
                   Organization risk score
                 </span>
-                <span className="text-gray-500 text-base cursor-help" title="Score out of 10">ⓘ</span>
+                <span className="text-slate-400 text-base cursor-help" title="Score out of 10">ⓘ</span>
               </div>
 
               <Gauge score={score} />
             </div>
 
             {/* Breakdown card */}
-            <div className="lg:col-span-3 bg-gray-800/50 rounded-xl border border-gray-700/50 p-5 flex flex-col gap-4">
-              <h2 className="text-sm font-semibold text-gray-300">Score Breakdown</h2>
+            <div className="lg:col-span-3 bg-blue-100/80 rounded-xl border border-blue-200 p-5 flex flex-col gap-4">
+              <h2 className="text-sm font-semibold text-slate-600">Score Breakdown</h2>
 
               <div className="space-y-5 flex-1">
                 {factors.map(f => {
@@ -438,37 +455,37 @@ export function RiskScore({ className = '' }: RiskScoreProps) {
                   return (
                     <div key={f.label} className="space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-300">{f.label}</span>
+                        <span className="text-sm font-medium text-slate-600">{f.label}</span>
                         <div className="flex items-center gap-2">
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${SEV_BADGE[f.severity]}`}>
                             {f.severity}
                           </span>
-                          <span className="text-xs text-gray-400 tabular-nums">
-                            {f.value}<span className="text-gray-500">/{f.maxValue} pts</span>
+                          <span className="text-xs text-slate-500 tabular-nums">
+                            {f.value}<span className="text-slate-400">/{f.maxValue} pts</span>
                           </span>
                         </div>
                       </div>
-                      <div className="h-2 rounded-full bg-gray-700 overflow-hidden">
+                      <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
                         <div
                           className={`h-full rounded-full transition-all duration-700 ${SEV_BAR[f.severity]}`}
                           style={{ width: `${pct}%` }}
                         />
                       </div>
-                      <p className="text-xs text-gray-400">{f.description}</p>
+                      <p className="text-xs text-slate-500">{f.description}</p>
                     </div>
                   );
                 })}
               </div>
 
               {/* Risk level legend — active level highlighted */}
-              <div className="pt-3 border-t border-gray-700">
+              <div className="pt-3 border-t border-blue-200">
                 <div className="grid grid-cols-4 gap-2">
                   {LEVELS.map(lv => (
                     <div
                       key={lv.label}
                       className={`rounded-lg px-2 py-2 text-center transition-all ${lv.bgCls} ${lv.textCls} ${
                         level.label === lv.label
-                          ? 'ring-2 ring-current ring-offset-1 ring-offset-gray-800 shadow scale-105'
+                          ? 'ring-2 ring-current ring-offset-1 ring-offset-white shadow scale-105'
                           : 'opacity-40'
                       }`}
                     >

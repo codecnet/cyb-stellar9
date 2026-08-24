@@ -159,6 +159,18 @@ export function Dashboard() {
 
       {isClient && <StatsOverview data={statsData} />}
 
+      {/* Top Risk Score - Full Width */}
+      <RiskScore className="w-full" />
+
+      {/* Global Threats Intelligence Display */}
+      <GlobalThreatsDisplay className="w-full" />
+
+      {/* Top 5 Risk Entities */}
+      <TopRiskEntities className="w-full" />
+
+      {/* Cybersecurity News Feed */}
+      <CyberNews className="w-full" />
+
       {/* Global Threat Map - Full Width */}
       <div className="card-gradient p-6 rounded-xl">
         <div className="flex items-center justify-between mb-4">
@@ -179,18 +191,6 @@ export function Dashboard() {
         </div>
         <AttackMap />
       </div>
-
-      {/* Global Threats Intelligence Display */}
-      <GlobalThreatsDisplay className="w-full" />
-
-      {/* Top 5 Risk Entities */}
-      <TopRiskEntities className="w-full" />
-
-      {/* Cybersecurity News Feed */}
-      <CyberNews className="w-full" />
-
-      {/* Top Risk Score */}
-      <RiskScore className="w-full" />
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-1 lg:grid-cols-2">
         <div className="card-gradient p-0 rounded-xl overflow-hidden">

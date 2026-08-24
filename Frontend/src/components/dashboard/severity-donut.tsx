@@ -61,12 +61,12 @@ export function SeverityDonut({ data }: SeverityDonutProps) {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600/30 to-indigo-600/30 backdrop-blur-sm px-4 py-3 rounded-t-xl">
+      <div className="px-4 py-3 rounded-t-xl border-b border-slate-200/80">
         <div className="flex items-center space-x-2 mb-1">
           <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-          <h3 className="text-base font-medium text-white">Severity Distribution</h3>
+          <h3 className="text-base font-medium text-slate-900">Severity Distribution</h3>
         </div>
-        <p className="text-xs text-blue-100/80">
+        <p className="text-xs text-slate-700">
           Last 24 hours • {total} total alerts
         </p>
       </div>

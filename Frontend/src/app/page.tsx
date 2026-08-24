@@ -18,7 +18,8 @@ export default function RootPage() {
       const isInternal = user.user_type === 'internal'
       const isExternal = user.user_type === 'external'
 
-      if (permissions.overview?.read) {
+      const isClientRole = user.role === 'Client'
+      if (permissions.overview?.read && !isClientRole) {
         // Users with overview permission see overview page first
         // Internal users: see all clients + settings (if permitted)
         // External users: see only their associated orgs (no settings)

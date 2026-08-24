@@ -71,9 +71,8 @@ const getSeverityColor = (severity: string) => {
 // }
 
 const mapSeverity = (level: number): Alert['severity'] => {
-  if (level >= 15) return 'critical'
-  if (level >= 11) return 'major'
-  if (level >= 7) return 'minor'
+  if (level >= 13) return 'critical'
+  if (level >= 10) return 'major'
   return 'minor'
 }
 
@@ -111,6 +110,19 @@ export function LiveAlertsTable({ alerts, ticketMap, fetchData, selectedClient, 
   const [localTicketMap, setLocalTicketMap] = useState<Record<string, string>>({})
   const [selectedAlerts, setSelectedAlerts] = useState<Set<string>>(new Set())
   const [isBulkCreating, setIsBulkCreating] = useState(false)
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 })
+  const [bulkResult, setBulkResult] = useState<{ created: number; failed: number } | null>(null)
+
+  // Warn before leaving the page while a bulk creation batch is in progress
+  useEffect(() => {
+    if (!isBulkCreating) return
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [isBulkCreating])
 
   // Save filters to localStorage when they change
   useEffect(() => {
@@ -277,17 +289,17 @@ export function LiveAlertsTable({ alerts, ticketMap, fetchData, selectedClient, 
     setLastRefresh(new Date())
   }, [alerts])
 
-  const createTicket = async (alert: Alert) => {
+  const createTicket = async (alert: Alert, skipRefresh = false): Promise<boolean> => {
     try {
       if (!selectedClient?.id) {
         console.error("No client selected. Please select a client/organization first.");
-        return;
+        return false;
       }
 
       // Prevent duplicate ticket creation
       if (creatingTickets.has(alert.id) || ticketMap?.[alert.id] || localTicketMap[alert.id]) {
         console.log("Ticket already exists or is being created for this alert");
-        return;
+        return false;
       }
 
       // Mark as creating
@@ -343,14 +355,19 @@ This alert requires investigation and appropriate action.`,
           onTicketCreated(alert.id, ticketId);
         }
 
-        // Refresh data
-        if (fetchData) {
+        // Refresh data (skipped during bulk creation; caller refreshes once at the end)
+        if (!skipRefresh && fetchData) {
           await fetchData();
         }
+
+        return true;
       }
+
+      return false;
 
     } catch (err: any) {
       console.log("Error creating ticket: " + err.message);
+      return false;
     } finally {
       // Remove from creating set
       setCreatingTickets(prev => {
@@ -392,22 +409,59 @@ This alert requires investigation and appropriate action.`,
     setSelectedAlerts(newSelected);
   };
 
-  // Bulk ticket creation
+  // Bulk ticket creation - runs in parallel with a bounded worker pool over the
+  // full alert list (not just the current page), refreshing once at the end.
   const createBulkTickets = async () => {
     if (selectedAlerts.size === 0) return;
 
-    setIsBulkCreating(true);
-    const alertsToProcess = currentAlerts.filter(alert => selectedAlerts.has(alert.id));
+    // Select from the full normalized list, not just the current page, and skip
+    // any alert that already has a ticket.
+    const alertsToProcess = mappedAlerts.filter(alert =>
+      selectedAlerts.has(alert.id) &&
+      !ticketMap?.[alert.id] &&
+      !localTicketMap[alert.id]
+    );
 
-    for (const alert of alertsToProcess) {
-      // Skip if ticket already exists
-      if (ticketMap?.[alert.id] || localTicketMap[alert.id]) {
-        continue;
+    if (alertsToProcess.length === 0) {
+      setSelectedAlerts(new Set());
+      return;
+    }
+
+    setBulkResult(null);
+    setBulkProgress({ done: 0, total: alertsToProcess.length });
+    setIsBulkCreating(true);
+
+    let created = 0;
+    let failed = 0;
+
+    // Worker pool: a shared cursor hands out work to up to CONCURRENCY workers.
+    const CONCURRENCY = 8;
+    let cursor = 0;
+
+    const worker = async () => {
+      while (cursor < alertsToProcess.length) {
+        const index = cursor++;
+        const alert = alertsToProcess[index];
+        const ok = await createTicket(alert, true);
+        if (ok) {
+          created++;
+        } else {
+          failed++;
+        }
+        setBulkProgress(prev => ({ ...prev, done: prev.done + 1 }));
       }
-      await createTicket(alert);
+    };
+
+    const workerCount = Math.min(CONCURRENCY, alertsToProcess.length);
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+    // Single refresh after the whole batch.
+    if (fetchData) {
+      await fetchData();
     }
 
     setIsBulkCreating(false);
+    setBulkResult({ created, failed });
     setSelectedAlerts(new Set());
   };
 
@@ -603,7 +657,7 @@ This alert requires investigation and appropriate action.`,
               {isBulkCreating ? (
                 <>
                   <div className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                  Creating {selectedAlerts.size} Tickets...
+                  Creating {bulkProgress.done}/{bulkProgress.total} Tickets...
                 </>
               ) : (
                 <>
@@ -615,6 +669,29 @@ This alert requires investigation and appropriate action.`,
           </PermissionGate>
         )}
       </div>
+
+      {/* Bulk creation result banner */}
+      {bulkResult && (
+        <div
+          className={clsx(
+            'flex items-center justify-between mb-4 px-4 py-3 rounded-lg border text-sm font-medium',
+            bulkResult.failed > 0
+              ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/50 text-amber-800 dark:text-amber-300'
+              : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800/50 text-green-800 dark:text-green-300'
+          )}
+        >
+          <span>
+            {bulkResult.created} created, {bulkResult.failed} failed
+          </span>
+          <button
+            onClick={() => setBulkResult(null)}
+            className="p-1 hover:bg-black/5 dark:hover:bg-white/5 rounded transition-colors"
+            title="Dismiss"
+          >
+            <XMarkIcon className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       <div className="overflow-x-auto bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-xl border border-gray-100 dark:border-gray-700/50 shadow-md">
         <table className="min-w-full divide-y divide-gray-200/70 dark:divide-gray-700/30">
@@ -904,6 +981,7 @@ This alert requires investigation and appropriate action.`,
               <option value={20}>20</option>
               <option value={50}>50</option>
               <option value={100}>100</option>
+              <option value={1000}>1000</option>
             </select>
             <span>alerts per page</span>
           </div>
@@ -1072,7 +1150,7 @@ This alert requires investigation and appropriate action.`,
                         <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
                         <span className="font-bold text-blue-800 dark:text-blue-300 text-xs uppercase tracking-wider">Alert Source</span>
                       </div>
-                      <span className="text-sm font-semibold text-blue-900 dark:text-blue-200">Codec Net Security Platform</span>
+                      <span className="text-sm font-semibold text-blue-900 dark:text-blue-200">Stellar9 Security Platform</span>
                     </div>
                     <div className="bg-gradient-to-r from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-xl p-4 border border-green-200/50 dark:border-green-700/50">
                       <div className="flex items-center mb-2">

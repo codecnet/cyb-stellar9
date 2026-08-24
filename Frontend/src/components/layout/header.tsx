@@ -99,64 +99,55 @@ export function Header() {
 
   return (
     <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200/70 dark:border-gray-800/40 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
+      {/* Organization Indicator - centered in the header */}
+      {selectedClient && (
+        <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center">
+          {/* Desktop org block */}
+          <div className="hidden sm:flex items-center gap-2.5 pl-3 pr-3.5 py-1.5 rounded-xl bg-gradient-to-r from-[#4f6ddf]/8 to-[#4f6ddf]/4 border border-[#4f6ddf]/20 shadow-[0_1px_4px_rgba(79,109,223,0.08)]">
+            <div className="flex items-center justify-center h-7 w-7 rounded-lg bg-[#4f6ddf] shadow-[0_2px_6px_-1px_rgba(79,109,223,0.5)]">
+              <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.25} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+            </div>
+            <div className="flex flex-col min-w-0 leading-tight">
+              <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-[#4f6ddf]/80">
+                {selectedClient.description || 'Organization'}
+              </span>
+              <span className="text-sm font-bold text-slate-900 truncate max-w-[160px]">
+                {selectedClient.name}
+              </span>
+            </div>
+          </div>
+
+          {/* Mobile org chip — compact */}
+          <div className="sm:hidden flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[#4f6ddf]/10 border border-[#4f6ddf]/20">
+            <div className="w-1.5 h-1.5 bg-[#4f6ddf] rounded-full" />
+            <span className="text-xs font-semibold text-slate-900 truncate max-w-[80px]">
+              {selectedClient.name}
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
         {/* Back to Client Overview Button */}
         {showBackButton && (
           <div className="flex items-center">
             <button
               onClick={handleBackToOverview}
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 transition-colors px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+              className="flex items-center gap-2 text-slate-600 hover:text-[#4f6ddf] transition-colors px-3 py-2 rounded-lg hover:bg-[#4f6ddf]/8"
             >
               <ArrowLeftIcon className="h-4 w-4" />
               <span className="text-sm font-medium">Back to Client Overview</span>
             </button>
           </div>
         )}
-        {/* Organization Indicator - Centered */}
-        <div className="flex-1 flex justify-center">
-          {selectedClient && (
-            <div className="flex items-center">
-              {/* Desktop version */}
-              <div className="hidden sm:flex items-center bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border border-blue-200 dark:border-blue-800 rounded-md px-3 py-1.5 shadow-sm">
-                <div className="flex items-center gap-x-2">
-                  <div className="flex items-center justify-center w-6 h-6 bg-blue-100 dark:bg-blue-900/40 rounded-full">
-                    <svg className="w-3 h-3 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wide">
-                      {selectedClient.description || 'Organization'}
-                    </span>
-                    <span className="text-sm font-semibold text-blue-900 dark:text-blue-100 truncate max-w-40">
-                      {selectedClient.name}
-                    </span>
-                  </div>
-                </div>
-              </div>
 
-              {/* Mobile version */}
-              <div className="sm:hidden flex items-center bg-blue-100 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800 rounded-md px-2 py-1 shadow-sm">
-                <div className="flex items-center gap-x-1.5">
-                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-xs font-medium text-blue-900 dark:text-blue-100 truncate max-w-24">
-                      {selectedClient.name}
-                    </span>
-                    {selectedClient.description && (
-                      <span className="text-xs text-blue-700 dark:text-blue-300 truncate max-w-24">
-                        {selectedClient.description}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+        {/* Spacer to push everything right */}
+        <div className="flex-1" />
 
-        <div className="flex items-center gap-x-4 lg:gap-x-6">
-          {/* Notifications */}
+        <div className="flex items-center gap-x-3 lg:gap-x-4">
+          {/* Notifications hidden
           <Menu as="div" className="relative">
             <Menu.Button className="relative rounded-full p-2 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50/80 dark:bg-gray-800/80 shadow-sm border border-gray-100/50 dark:border-gray-700/30 transition-all duration-200 hover:scale-105">
               <span className="sr-only">View notifications</span>
@@ -215,6 +206,7 @@ export function Header() {
               </Menu.Items>
             </Transition>
           </Menu>
+          */}
 
           {/* Profile dropdown */}
           <Menu as="div" className="relative">

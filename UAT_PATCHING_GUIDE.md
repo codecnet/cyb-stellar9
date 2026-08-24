@@ -3178,7 +3178,7 @@ pm2 restart uat-soc-backend
 
 **Result:**
 ```
-✅ Found organization: Codec Networks Pvt. Ltd.
+✅ Found organization: Stellar9 Pvt. Ltd.
 🔍 Organization credentials check: {
   name: 'Codec Networks Pvt. Ltd.',
   hasWazuhCreds: true,
@@ -3186,7 +3186,7 @@ pm2 restart uat-soc-backend
   wazuh_ip: '122.176.142.223',
   indexer_ip: '122.176.142.223'
 }
-✅ Client credentials set for Codec Networks Pvt. Ltd.
+✅ Client credentials set for Stellar9 Pvt. Ltd.
 [i] Getting fresh Wazuh token for wazuh at https://122.176.142.223:55000...
 [✓] Token acquired
 
@@ -5618,8 +5618,8 @@ Expected Behavior:
 **Backend Logs (After Fix):**
 ```
 🔍 Fetching organization with ID: undefined
-✅ Found organization: Codec Networks
-✅ Client credentials set for Codec Networks
+✅ Found organization: Stellar9
+✅ Client credentials set for Stellar9
 ```
 
 ---

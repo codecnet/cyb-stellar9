@@ -51,6 +51,23 @@ interface Ticket {
   updatedAt: string
 }
 
+// Windowed ticket loading for the 30-day / 90-day filters.
+// Arriving from an alert's "View Ticket" while one of those filters is active
+// loads only TICKET_WINDOW_DAYS either side of the selected ticket instead of
+// the whole range, and caches that window so moving between nearby tickets
+// costs no further requests.
+const TICKET_WINDOW_DAYS = 2
+const WINDOWED_FILTER_HOURS = [720, 2160] // Last 30 Days, Last 90 Days
+
+interface TicketWindow {
+  startMs: number
+  endMs: number
+  tickets: Ticket[]
+}
+
+// Module-scoped so the cache survives client-side navigation between pages.
+const ticketWindowCache = new Map<string, TicketWindow>()
+
 export default function TicketPage() {
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [loading, setLoading] = useState(false)
@@ -99,18 +116,102 @@ export default function TicketPage() {
     }
   }, [timeRangeType, relativeHours, fromDate, toDate])
 
-  const fetchTickets = async () => {
+  const fetchTickets = async (opts?: { force?: boolean }) => {
     console.log('=== FETCH TICKETS CALLED ===');
     console.log('isClientMode:', isClientMode);
     console.log('selectedClient:', selectedClient);
 
+    const force = opts?.force === true
+    const highlightId = searchParams?.get('highlight') || null
+
+    // A forced refetch (manual refresh, or a mutation from the table) must not
+    // serve stale rows, so drop every cached window first.
+    if (force) ticketWindowCache.clear()
+
     setLoading(true)
     setError(null)
     try {
-      // Add organization filter if client is selected
+      const orgId = isClientMode && selectedClient?.id ? selectedClient.id : null
+      const cacheScope = orgId || 'all'
+      // The 30d/90d filter may have been applied on the Alerts page (the flow is
+      // alerts -> "View Ticket"), which keeps its own separate setting. Honour
+      // either, otherwise the window would never trigger in that exact flow.
+      let alertsFilterHours = 0
+      if (typeof window !== 'undefined') {
+        const alertsRangeType = localStorage.getItem('alerts_timeRangeType') || 'relative'
+        if (alertsRangeType === 'relative') {
+          alertsFilterHours = parseInt(localStorage.getItem('alerts_relativeHours') || '0', 10)
+        }
+      }
+      const isWindowedFilter =
+        (timeRangeType === 'relative' && WINDOWED_FILTER_HOURS.includes(relativeHours)) ||
+        WINDOWED_FILTER_HOURS.includes(alertsFilterHours)
+
+      // --- Windowed path: "View Ticket" from an alert under a 30d/90d filter ---
+      if (highlightId && isWindowedFilter) {
+        // Already inside a cached window? Reuse it with no network call at all.
+        // This is what makes navigating between nearby tickets free.
+        if (!force) {
+          const hit = Array.from(ticketWindowCache.entries()).find(
+            ([key, win]) =>
+              key.indexOf(cacheScope + '|') === 0 &&
+              win.tickets.some((t) => t._id === highlightId)
+          )
+          if (hit) {
+            console.log('[tickets] window cache hit (contains ticket) — no refetch');
+            setTickets(hit[1].tickets)
+            return
+          }
+        }
+
+        // Resolve the selected ticket's timestamp to anchor the window.
+        let anchorMs: number | null = null
+        try {
+          const anchorRes = await ticketsApi.getTicketById(highlightId)
+          const created = anchorRes?.data?.createdAt
+          if (created) {
+            const parsed = new Date(created).getTime()
+            if (!Number.isNaN(parsed)) anchorMs = parsed
+          }
+        } catch (anchorErr) {
+          console.warn('[tickets] could not resolve anchor ticket, using full range', anchorErr);
+          anchorMs = null
+        }
+
+        // If the anchor cannot be resolved (deleted ticket / bad id) fall
+        // through to the normal full-range fetch below.
+        if (anchorMs !== null) {
+          const spanMs = TICKET_WINDOW_DAYS * 24 * 60 * 60 * 1000
+          const startMs = anchorMs - spanMs
+          const endMs = anchorMs + spanMs
+          const cacheKey = cacheScope + '|' + startMs + '|' + endMs
+
+          const cached = ticketWindowCache.get(cacheKey)
+          if (cached) {
+            console.log('[tickets] window cache hit (same window) — no refetch');
+            setTickets(cached.tickets)
+            return
+          }
+
+          const windowParams: any = {
+            start_date: new Date(startMs).toISOString(),
+            end_date: new Date(endMs).toISOString(),
+          }
+          if (orgId) windowParams.organisation_id = orgId
+
+          console.log('[tickets] fetching +/-' + TICKET_WINDOW_DAYS + 'd window', windowParams);
+          const windowData = await ticketsApi.getTickets(windowParams)
+          const windowTickets: Ticket[] = windowData.data || []
+          ticketWindowCache.set(cacheKey, { startMs, endMs, tickets: windowTickets })
+          setTickets(windowTickets)
+          return
+        }
+      }
+
+      // --- Existing behavior, unchanged ---
       const params: any = {}
-      if (isClientMode && selectedClient?.id) {
-        params.organisation_id = selectedClient.id
+      if (orgId) {
+        params.organisation_id = orgId
       }
 
       // Add time filter parameters (skip if All Time is selected)
@@ -146,7 +247,7 @@ export default function TicketPage() {
 
   useEffect(() => {
     fetchTickets()
-  }, [selectedClient?.id, isClientMode, timeRangeType, relativeHours, fromDate, toDate]) // Re-fetch when selected client or time range changes
+  }, [selectedClient?.id, isClientMode, timeRangeType, relativeHours, fromDate, toDate, searchParams?.get('highlight')]) // Re-fetch when selected client or time range changes
 
   // Handle highlighting from URL parameters
   useEffect(() => {
@@ -185,7 +286,7 @@ export default function TicketPage() {
         </div>
         <div className="flex items-center space-x-2">
           <button
-            onClick={fetchTickets}
+            onClick={() => fetchTickets({ force: true })}
             className="inline-flex ml-4 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition"
             disabled={loading}
           >
@@ -477,7 +578,7 @@ export default function TicketPage() {
           tickets={tickets}
           loading={loading}
           error={error}
-          fetchTickets={fetchTickets} // pass so child can refetch after transition
+          fetchTickets={() => fetchTickets({ force: true })} // pass so child can refetch after transition
           highlightedTicket={highlightedTicket}
         />
       </div>

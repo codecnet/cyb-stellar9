@@ -2,6 +2,8 @@ import React, { useState, useEffect, FormEvent } from 'react';
 import Cookies from 'js-cookie';
 import { Permission } from '../types';
 
+const BASE_URL = process.env.NEXT_PUBLIC_RBAC_BASE_IP || 'http://localhost:5000/api';
+
 // --- Component Props ---
 interface PermissionFormProps {
     initialData?: Permission | null;
@@ -62,7 +64,7 @@ const PermissionForm: React.FC<PermissionFormProps> = ({ initialData, onClose, o
         };
 
         // Note: Editing functionality would require a PUT request and a different URL
-        const url = 'http://localhost:5000/api/permissions/create';
+        const url = `${BASE_URL}/permissions/create`;
         const method = 'POST';
 
         try {

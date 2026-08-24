@@ -1723,12 +1723,12 @@ export default function ClientOverview() {
         if (formData.wazuh_manager_password && formData.wazuh_manager_password.trim()) {
           // Validate password strength
           if (formData.wazuh_manager_password.length < 8) {
-            setError('Wazuh Manager password must be at least 8 characters');
+            setError('CYB Manager password must be at least 8 characters');
             setIsSubmitting(false);
             return;
           }
           if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(formData.wazuh_manager_password)) {
-            setError('Wazuh Manager password must contain uppercase, lowercase, and digit');
+            setError('CYB Manager password must contain uppercase, lowercase, and digit');
             setIsSubmitting(false);
             return;
           }
@@ -1748,12 +1748,12 @@ export default function ClientOverview() {
         if (formData.wazuh_indexer_password && formData.wazuh_indexer_password.trim()) {
           // Validate password strength
           if (formData.wazuh_indexer_password.length < 8) {
-            setError('Wazuh Indexer password must be at least 8 characters');
+            setError('CYB Indexer password must be at least 8 characters');
             setIsSubmitting(false);
             return;
           }
           if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(formData.wazuh_indexer_password)) {
-            setError('Wazuh Indexer password must contain uppercase, lowercase, and digit');
+            setError('CYB Indexer password must contain uppercase, lowercase, and digit');
             setIsSubmitting(false);
             return;
           }
@@ -1773,12 +1773,12 @@ export default function ClientOverview() {
         if (formData.wazuh_dashboard_password && formData.wazuh_dashboard_password.trim()) {
           // Validate password strength
           if (formData.wazuh_dashboard_password.length < 8) {
-            setError('Wazuh Dashboard password must be at least 8 characters');
+            setError('CYB Dashboard password must be at least 8 characters');
             setIsSubmitting(false);
             return;
           }
           if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(formData.wazuh_dashboard_password)) {
-            setError('Wazuh Dashboard password must contain uppercase, lowercase, and digit');
+            setError('CYB Dashboard password must contain uppercase, lowercase, and digit');
             setIsSubmitting(false);
             return;
           }
@@ -1976,7 +1976,7 @@ export default function ClientOverview() {
 
                 {/* Right Column - Wazuh Config */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl p-5 border border-gray-200 dark:border-gray-700">
-                  <h3 className="text-md font-bold text-gray-900 dark:text-white mb-4">Wazuh Configuration</h3>
+                  <h3 className="text-md font-bold text-gray-900 dark:text-white mb-4">CYB Configuration</h3>
                   <div className="space-y-4">
                     {/* Manager */}
                     <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
@@ -2439,15 +2439,6 @@ export default function ClientOverview() {
             <ShieldExclamationIcon className="h-8 w-8 text-orange-500 mb-3" />
             <h3 className="text-gray-900 dark:text-white font-semibold mb-2">Risk Matrix</h3>
             <p className="text-gray-600 dark:text-gray-400 text-sm">Assess security risks</p>
-          </button>
-
-          <button
-            onClick={() => handleClientNavigation('/compliance')}
-            className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-indigo-500 dark:hover:border-indigo-500 transition-colors text-left shadow-sm"
-          >
-            <ShieldCheckIcon className="h-8 w-8 text-indigo-500 mb-3" />
-            <h3 className="text-gray-900 dark:text-white font-semibold mb-2">Compliance</h3>
-            <p className="text-gray-600 dark:text-gray-400 text-sm">Track compliance status</p>
           </button>
 
           <button
@@ -3543,7 +3534,7 @@ export default function ClientOverview() {
 
 //         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 //           <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-//             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Wazuh Configuration</h3>
+//             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">CYB Configuration</h3>
 //             <div className="space-y-3">
 //               <div className="flex justify-between">
 //                 <span className="text-gray-600 dark:text-gray-400 text-sm">IP Address:</span>
@@ -4418,7 +4409,7 @@ export default function ClientOverview() {
 
 // //         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 // //           <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-// //             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Wazuh Configuration</h3>
+// //             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">CYB Configuration</h3>
 // //             <div className="space-y-3">
 // //               <div className="flex justify-between">
 // //                 <span className="text-gray-600 dark:text-gray-400 text-sm">IP Address:</span>
@@ -5214,7 +5205,7 @@ export default function ClientOverview() {
 // // //         {/* Additional Client Information */}
 // // //         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 // // //           <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm">
-// // //             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Wazuh Configuration</h3>
+// // //             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">CYB Configuration</h3>
 // // //             <div className="space-y-3">
 // // //               <div className="flex justify-between">
 // // //                 <span className="text-gray-600 dark:text-gray-400 text-sm">IP Address:</span>

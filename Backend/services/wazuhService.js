@@ -236,12 +236,13 @@ export const getDashboardMetricsService = async (clientCreds) => {
 export const getAlertsService = async (indexerCredentials, options = {}, organizationId = null) => {
   const { host, username, password } = indexerCredentials;
   const auth = Buffer.from(`${username}:${password}`).toString("base64");
+  const minLevel = parseInt(process.env.WAZUH_MIN_ALERT_LEVEL) || 8;
 
   return await withRetry(async () => {
     const response = await axiosInstance.post(
       `${host}/wazuh-alerts-*/_search`,
       {
-        query: { range: { "rule.level": { gte: 8 } } },
+        query: { range: { "rule.level": { gte: minLevel } } },
         sort: [{ "@timestamp": { order: "desc" } }],
         size: 10000, // Elasticsearch max limit without pagination
         // Removed _source to fetch complete alert JSON with all fields
@@ -331,9 +332,9 @@ async function getAlertStatistics({ host, username, password }) {
               range: {
                 field: "rule.level",
                 ranges: [
-                  { key: "Minor", from: 8, to: 11 },
-                  { key: "Major", from: 11, to: 14 },
-                  { key: "Critical", from: 14 },
+                  { key: "Minor", to: 10 },
+                  { key: "Major", from: 10, to: 13 },
+                  { key: "Critical", from: 13 },
                 ],
               },
             },
@@ -363,9 +364,9 @@ async function getAlertStatistics({ host, username, password }) {
               range: {
                 field: "rule.level",
                 ranges: [
-                  { key: "Minor", from: 8, to: 11 },
-                  { key: "Major", from: 11, to: 14 },
-                  { key: "Critical", from: 14 },
+                  { key: "Minor", to: 10 },
+                  { key: "Major", from: 10, to: 13 },
+                  { key: "Critical", from: 13 },
                 ],
               },
             },
@@ -452,9 +453,9 @@ async function getHourlyAlerts({ host, username, password }) {
             range: {
               field: "rule.level",
               ranges: [
-                { key: "Minor", from: 8, to: 11 },
-                { key: "Major", from: 11, to: 14 },
-                { key: "Critical", from: 14 },
+                { key: "Minor", to: 10 },
+                { key: "Major", from: 10, to: 13 },
+                { key: "Critical", from: 13 },
               ],
             },
             aggs: {

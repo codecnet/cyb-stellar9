@@ -1,7 +1,7 @@
 # Unused Files and Folders Analysis
 
 **Analysis Date**: 2025-10-22
-**Project**: SOC Dashboard (Codec Net)
+**Project**: SOC Dashboard (Stellar9)
 
 ---
 

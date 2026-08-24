@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useClient } from '@/contexts/ClientContext'
-import { Shield, AlertTriangle, Clock, Activity, TrendingUp, CheckCircle } from 'lucide-react'
+import { Shield, AlertTriangle, Activity, TrendingUp, CheckCircle } from 'lucide-react'
 import { ShieldExclamationIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import Cookies from 'js-cookie'
 import { subscribeToDataChanges } from '@/lib/alertsStream'
@@ -184,7 +184,7 @@ export function SecurityMetrics() {
       {data && (
         <>
           {/* Key Metrics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {/* Threats Blocked */}
         <div className="card-gradient p-6 border-l-4 border-red-500">
           <div className="flex items-center justify-between mb-4">
@@ -209,20 +209,6 @@ export function SecurityMetrics() {
           <p className="mt-3 text-xs text-gray-600 dark:text-gray-400">
             {data.incidentsOpened} opened • {data.responseRate}% response rate
           </p>
-        </div>
-
-        {/* MTTR */}
-        <div className="card-gradient p-6 border-l-4 border-blue-500">
-          <div className="flex items-center justify-between mb-4">
-            <Clock className="w-8 h-8 text-blue-500" />
-            <span className="text-3xl font-bold text-gray-900 dark:text-white">{data.mttr.formatted}</span>
-          </div>
-          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">Mean Time to Response</h3>
-          <div className="mt-3 flex gap-2 text-xs">
-            <span className="bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-2 py-1 rounded">Critical: {data.mttr.bySeverity.critical.formatted}</span>
-            <span className="bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 px-2 py-1 rounded">Major: {data.mttr.bySeverity.major.formatted}</span>
-            <span className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 px-2 py-1 rounded">Minor: {data.mttr.bySeverity.minor.formatted}</span>
-          </div>
         </div>
 
         {/* Active Threats */}

@@ -209,7 +209,7 @@ const generateTicketEmail = (ticket: Ticket) => {
       </tr>
       <tr>
         <td class="field-name">Detection Source</td>
-        <td>Codec Net</td>
+        <td>Stellar9</td>
       </tr>
       <tr>
         <td class="field-name">Affected Asset(s)</td>
@@ -239,7 +239,7 @@ const generateTicketEmail = (ticket: Ticket) => {
     <div class="footer">
       <p>Regards,<br>
       <strong>${getCreatedByName()}</strong><br>
-      SOC Team (Codec Net)</p>
+      SOC Team (Stellar9)</p>
     </div>
   </div>
 </body>
@@ -677,7 +677,7 @@ export default function TicketsTable({ tickets, loading, error, fetchTickets, hi
       </tr>
       <tr>
         <td class="field-name" style="font-weight: 600; color: #2c3e50; width: 35%; padding: 12px; border-bottom: 1px solid #ddd;">Detection Source</td>
-        <td style="padding: 12px; border-bottom: 1px solid #ddd; background: #f8f9fa;">Codec Net</td>
+        <td style="padding: 12px; border-bottom: 1px solid #ddd; background: #f8f9fa;">Stellar9</td>
       </tr>
       <tr>
         <td class="field-name" style="font-weight: 600; color: #2c3e50; width: 35%; padding: 12px; border-bottom: 1px solid #ddd;">Affected Asset(s)</td>
@@ -747,7 +747,7 @@ export default function TicketsTable({ tickets, loading, error, fetchTickets, hi
 
     <div class="footer">
       <p>Regards,<br>
-      <strong>SOC Team (Codec Net)</strong></p>
+      <strong>SOC Team (Stellar9)</strong></p>
     </div>
   </div>
 </body>
@@ -1116,6 +1116,7 @@ export default function TicketsTable({ tickets, loading, error, fetchTickets, hi
               <option value={25}>25</option>
               <option value={50}>50</option>
               <option value={100}>100</option>
+              <option value={1000}>1000</option>
             </select>
             <span className="text-sm text-gray-700 dark:text-gray-300">
               of {totalTickets} tickets
@@ -1233,16 +1234,29 @@ export default function TicketsTable({ tickets, loading, error, fetchTickets, hi
                       const nestedRows = flattenObject(value, fullKey);
                       rows.push(...nestedRows);
                     } else if (Array.isArray(value)) {
-                      // Array - show as comma-separated values
-                      const arrayValue = value.every(v => typeof v === 'string' || typeof v === 'number')
-                        ? value.join(', ')
-                        : JSON.stringify(value);
-                      rows.push({ key: fullKey, value: arrayValue });
+                      if (key === 'comments' && value.length > 0) {
+                        // Comments: show only the comment text - author/date are
+                        // already shown as separate fields elsewhere in this panel
+                        const commentLines = value.map((c: any) => c?.comment ?? '');
+                        rows.push({ key: fullKey, value: commentLines.join('\n') });
+                      } else {
+                        // Other arrays - show as comma-separated values
+                        const arrayValue = value.length === 0
+                          ? 'None'
+                          : value.every(v => typeof v === 'string' || typeof v === 'number')
+                          ? value.join(', ')
+                          : JSON.stringify(value);
+                        rows.push({ key: fullKey, value: arrayValue });
+                      }
                     } else {
                       // Primitive value
                       let displayValue = value;
-                      // Format dates
-                      if (key === 'createdAt' || key === 'updatedAt' || key.includes('date') || key.includes('Date') || key.includes('_at')) {
+                      // Format dates - match only real date-field naming by suffix, not a loose
+                      // substring check (which would falsely match e.g. "updated_by" via the
+                      // "date" inside "upDATEd").
+                      const isDateField = key === 'createdAt' || key === 'updatedAt'
+                        || /(_at|_date)$/i.test(key) || /(At|Date)$/.test(key);
+                      if (isDateField) {
                         displayValue = formatDate(String(value));
                       }
                       rows.push({ key: fullKey, value: displayValue });

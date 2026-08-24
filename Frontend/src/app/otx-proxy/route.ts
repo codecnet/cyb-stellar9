@@ -1,6 +1,5 @@
-// src/app/api/otx-proxy/route.ts
-
-import { NextRequest } from 'next/server';
+// src/app/otx-proxy/route.ts
+// Served at /otx-proxy (deliberately outside /api, which nginx routes to the Express backend).
 
 // Types
 interface ThreatData {
@@ -434,6 +433,10 @@ const generateMockOTXData = (): { threats: ThreatData[], arcs: ArcData[] } => {
 
   return { threats, arcs };
 };
+
+// Always run per-request: this route reads env vars and fetches live external data,
+// so it must not be statically cached at build time.
+export const dynamic = 'force-dynamic';
 
 // App Router GET Handler
 export async function GET(request: Request) {

@@ -20,6 +20,8 @@ const getAlertsCount = asyncHandler(async (req, res) => {
 
     const { host: INDEXER_HOST, username: INDEXER_USER, password: INDEXER_PASS } = indexerCreds;
 
+    const minAlertLevel = parseInt(process.env.WAZUH_MIN_ALERT_LEVEL) || 8;
+
     // Get time range parameters (hours for relative, or absolute from/to timestamps)
     const { hours, from, to } = req.query;
 
@@ -69,7 +71,7 @@ const getAlertsCount = asyncHandler(async (req, res) => {
       {
         range: {
           "rule.level": {
-            gte: 8,
+            gte: minAlertLevel,
           },
         },
       }
@@ -142,6 +144,8 @@ const getAlerts = asyncHandler(async (req, res) => {
 
     const { host: INDEXER_HOST, username: INDEXER_USER, password: INDEXER_PASS } = indexerCreds;
 
+    const minAlertLevel = parseInt(process.env.WAZUH_MIN_ALERT_LEVEL) || 8;
+
     // Get time range parameters (hours for relative, or absolute from/to timestamps)
     const { hours } = req.query;
     const timeFrom = req.query.from;
@@ -194,7 +198,7 @@ const getAlerts = asyncHandler(async (req, res) => {
       {
         range: {
           "rule.level": {
-            gte: 8,
+            gte: minAlertLevel,
           },
         },
       }
@@ -603,19 +607,19 @@ const getEventsCountByAgent = asyncHandler(async (req, res) => {
                 size: 1
               }
             },
-            // Count critical alerts (severity >= 15)
+            // Count critical alerts (severity >= 13)
             critical_count: {
               filter: {
                 range: {
-                  "rule.level": { gte: 15 }
+                  "rule.level": { gte: 13 }
                 }
               }
             },
-            // Count major alerts (severity 11-14)
+            // Count major alerts (severity 10-12)
             major_count: {
               filter: {
                 range: {
-                  "rule.level": { gte: 11, lt: 15 }
+                  "rule.level": { gte: 10, lt: 13 }
                 }
               }
             },
@@ -707,7 +711,7 @@ const getLogsCountByAgent = asyncHandler(async (req, res) => {
     const { hours, from, to, limit = 100 } = req.query;
 
     // Check cache
-    const cacheKey = `logs_count_by_agent:${organizationId}:${hours || 'all'}:${from || ''}:${to || ''}:${limit}`;
+    const cacheKey = `logs_count_by_agent:v3:${organizationId}:${hours || 'all'}:${from || ''}:${to || ''}:${limit}`;
     try {
       const cachedData = await redisClient.get(cacheKey);
       if (cachedData) {
@@ -769,6 +773,31 @@ const getLogsCountByAgent = asyncHandler(async (req, res) => {
       size: 0,
       query: timeFilter ? timeFilter : { match_all: {} },
       aggs: {
+        // Agentless / integration sources do not appear as Wazuh agents - they all
+        // arrive via the syslog collector - so count them separately by decoder
+        // and integration rather than by agent.
+        by_source: {
+          filters: {
+            filters: {
+              firewall:  { term: { "decoder.name": "fortigate-firewall-v5" } },
+              office365: { term: { "data.integration": "office365" } },
+              aws:       { term: { "data.integration": "aws" } },
+              endpoints: { term: { "decoder.name": "windows_eventchannel" } }
+            }
+          },
+          aggs: {
+            // which agent carried these events, so they can be deducted from that
+            // agent's own row and not counted twice
+            by_agent: { terms: { field: "agent.id", size: 20 } },
+            logs_over_time: {
+              date_histogram: {
+                field: "@timestamp",
+                fixed_interval: histogramInterval,
+                min_doc_count: 0
+              }
+            }
+          }
+        },
         logs_per_agent: {
           terms: {
             field: "agent.id",
@@ -831,10 +860,57 @@ const getLogsCountByAgent = asyncHandler(async (req, res) => {
       };
     });
 
+    const srcBuckets = aggResponse.data.aggregations?.by_source?.buckets || {};
+    const srcCount = (k) => srcBuckets[k]?.doc_count || 0;
+    const totalLogs = agentLogs.reduce((sum, agent) => sum + agent.log_count, 0);
+    const firewall = srcCount('firewall');
+    const office365 = srcCount('office365');
+    const aws = srcCount('aws');
+    const endpoints = srcCount('endpoints');
+
+    // Agentless feeds all arrive through the syslog collector, so they inflate that
+    // one agent's row. Emit them as their own rows and subtract what they contributed
+    // from the agent that carried them, keeping the overall total unchanged.
+    const SRC_META = {
+      firewall:  { id: 'FW',   name: 'Firewall (FortiGate)',  ip: 'syslog' },
+      office365: { id: 'M365', name: 'Microsoft Office 365',  ip: 'api' },
+      aws:       { id: 'AWS',  name: 'AWS CloudTrail',        ip: 'api' }
+    };
+    const deduct = {};
+    const sourceRows = Object.keys(SRC_META).map((key) => {
+      const b = srcBuckets[key] || {};
+      (b.by_agent?.buckets || []).forEach((x) => {
+        deduct[x.key] = (deduct[x.key] || 0) + x.doc_count;
+      });
+      return {
+        agent_id: SRC_META[key].id,
+        agent_name: SRC_META[key].name,
+        agent_ip: SRC_META[key].ip,
+        log_count: b.doc_count || 0,
+        trend: (b.logs_over_time?.buckets || []).map((tb) => ({
+          timestamp: tb.key_as_string || new Date(tb.key).toISOString(),
+          count: tb.doc_count
+        })),
+        is_source: true
+      };
+    }).filter((r) => r.log_count > 0);
+
+    agentLogs.forEach((a) => {
+      if (deduct[a.agent_id]) a.log_count = Math.max(0, a.log_count - deduct[a.agent_id]);
+    });
+
     const responseData = {
       agents: agentLogs,
+      source_rows: sourceRows,
       total_agents: agentLogs.length,
-      total_logs: agentLogs.reduce((sum, agent) => sum + agent.log_count, 0),
+      total_logs: totalLogs,
+      sources: {
+        firewall,
+        office365,
+        aws,
+        endpoints,
+        other: Math.max(0, totalLogs - firewall - office365 - aws - endpoints)
+      },
       trend_interval: histogramInterval
     };
 

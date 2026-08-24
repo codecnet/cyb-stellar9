@@ -22,6 +22,7 @@ interface TrendPoint {
 }
 
 interface AgentLogData {
+  is_source?: boolean
   agent_id: string
   agent_name: string
   agent_ip: string
@@ -30,9 +31,17 @@ interface AgentLogData {
 }
 
 interface LogsByAgentResponse {
+  source_rows?: AgentLogData[]
   agents: AgentLogData[]
   total_agents: number
   total_logs: number
+  sources?: {
+    firewall: number;
+    office365: number;
+    aws: number;
+    endpoints: number;
+    other: number;
+  };
   trend_interval?: string
 }
 
@@ -312,15 +321,15 @@ function AgentTrendModal({
       <div className="relative z-10 w-full max-w-3xl bg-white dark:bg-gray-800 rounded-2xl shadow-xl flex flex-col max-h-[90vh]">
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                <ComputerDesktopIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                <ComputerDesktopIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                   {agent.agent_name || 'Unknown Agent'}
                 </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 truncate">
                   ID: {agent.agent_id} • IP: {agent.agent_ip}
                 </p>
               </div>
@@ -340,15 +349,15 @@ function AgentTrendModal({
           {/* Stats Cards */}
           <div className="grid grid-cols-4 gap-4 p-6 border-b border-gray-200 dark:border-gray-700">
             <div className="text-center">
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatNumber(agent.log_count)}</p>
+              <p className="text-base sm:text-lg xl:text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap tabular-nums">{formatNumber(agent.log_count)}</p>
               <p className="text-xs text-gray-500 dark:text-gray-400">Total Logs</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatNumber(avgCount)}</p>
+              <p className="text-base sm:text-lg xl:text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap tabular-nums">{formatNumber(avgCount)}</p>
               <p className="text-xs text-gray-500 dark:text-gray-400">Avg per Period</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatNumber(maxCount)}</p>
+              <p className="text-base sm:text-lg xl:text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap tabular-nums">{formatNumber(maxCount)}</p>
               <p className="text-xs text-gray-500 dark:text-gray-400">Peak</p>
             </div>
             <div className="text-center">
@@ -515,7 +524,10 @@ export default function LogsByAgentPage() {
   const filteredAndSortedAgents = React.useMemo(() => {
     if (!data?.agents) return []
 
-    let filtered = data.agents.filter(agent =>
+    // agentless sources render as rows alongside the agents
+    const rows = [...(data.source_rows || []), ...data.agents]
+
+    let filtered = rows.filter(agent =>
       agent.agent_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       agent.agent_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       agent.agent_ip?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -564,6 +576,16 @@ export default function LogsByAgentPage() {
     return new Intl.NumberFormat().format(num)
   }
 
+  // Summary cards sit six-across, so an 8-digit figure will not fit at any font
+  // size. Show a compact value there and keep the exact number in the tooltip.
+  const formatCompact = (num: number) => {
+    if (!Number.isFinite(num)) return '0'
+    if (num >= 1e9) return `${(num / 1e9).toFixed(2).replace(/\.?0+$/, '')}B`
+    if (num >= 1e6) return `${(num / 1e6).toFixed(2).replace(/\.?0+$/, '')}M`
+    if (num >= 1e4) return `${(num / 1e3).toFixed(1).replace(/\.0$/, '')}K`
+    return new Intl.NumberFormat().format(num)
+  }
+
   const getLogCountColor = (count: number, maxCount: number) => {
     const ratio = count / maxCount
     if (ratio > 0.7) return 'text-red-600 dark:text-red-400'
@@ -572,8 +594,11 @@ export default function LogsByAgentPage() {
   }
 
   const maxLogCount = React.useMemo(() => {
-    if (!data?.agents?.length) return 1
-    return Math.max(...data.agents.map(a => a.log_count || 0))
+    // source rows are counted too - a feed can easily out-scale every agent,
+    // which would otherwise push the distribution bar past 100% and out of the card
+    const rows = [...(data?.source_rows || []), ...(data?.agents || [])]
+    if (!rows.length) return 1
+    return Math.max(1, ...rows.map(a => a.log_count || 0))
   }, [data])
 
   return (
@@ -601,33 +626,53 @@ export default function LogsByAgentPage() {
 
       {/* Summary Cards */}
       {data && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                <ComputerDesktopIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 sm:p-5 shadow-sm border border-gray-200 dark:border-gray-700 min-w-0">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div className="p-2 sm:p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg shrink-0">
+                <ComputerDesktopIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Total Agents</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {formatNumber(data.total_agents)}
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 truncate">Total Agents</p>
+                <p title={formatNumber(data.total_agents)} className="text-base sm:text-lg xl:text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap tabular-nums">
+                  {formatCompact(data.total_agents)}
                 </p>
               </div>
             </div>
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                <DocumentTextIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 sm:p-5 shadow-sm border border-gray-200 dark:border-gray-700 min-w-0">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div className="p-2 sm:p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg shrink-0">
+                <DocumentTextIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Total Logs</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {formatNumber(data.total_logs)}
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 truncate">Total Logs</p>
+                <p title={formatNumber(data.total_logs)} className="text-base sm:text-lg xl:text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap tabular-nums">
+                  {formatCompact(data.total_logs)}
                 </p>
               </div>
             </div>
           </div>
+          {[
+            { label: 'Endpoints',  value: data.sources?.endpoints ?? 0, box: 'bg-slate-100 dark:bg-slate-900/30',   ico: 'text-slate-600 dark:text-slate-400'   },
+            { label: 'Firewall',   value: data.sources?.firewall  ?? 0, box: 'bg-orange-100 dark:bg-orange-900/30', ico: 'text-orange-600 dark:text-orange-400' },
+            { label: 'Office 365', value: data.sources?.office365 ?? 0, box: 'bg-purple-100 dark:bg-purple-900/30', ico: 'text-purple-600 dark:text-purple-400' },
+            { label: 'AWS',        value: data.sources?.aws       ?? 0, box: 'bg-amber-100 dark:bg-amber-900/30',   ico: 'text-amber-600 dark:text-amber-400'   },
+          ].map(src => (
+            <div key={src.label} className="bg-white dark:bg-gray-800 rounded-xl p-4 sm:p-5 shadow-sm border border-gray-200 dark:border-gray-700 min-w-0">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <div className={clsx('p-2 sm:p-3 rounded-lg shrink-0', src.box)}>
+                  <DocumentTextIcon className={clsx('h-5 w-5', src.ico)} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 truncate">{src.label}</p>
+                  <p title={formatNumber(src.value)} className="text-base sm:text-lg xl:text-xl font-bold text-gray-900 dark:text-white whitespace-nowrap tabular-nums">
+                    {formatCompact(src.value)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -790,10 +835,17 @@ export default function LogsByAgentPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2">
-                          <ComputerDesktopIcon className="h-5 w-5 text-gray-400" />
+                          {agent.is_source
+                            ? <DocumentTextIcon className="h-5 w-5 text-orange-500" />
+                            : <ComputerDesktopIcon className="h-5 w-5 text-gray-400" />}
                           <span className="text-sm font-medium text-gray-900 dark:text-white">
                             {agent.agent_name || 'Unknown'}
                           </span>
+                          {agent.is_source && (
+                            <span className="ml-1 inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+                              Log Source
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -819,14 +871,14 @@ export default function LogsByAgentPage() {
                         </button>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                        <div className="w-24 sm:w-32 max-w-full overflow-hidden bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
                           <div
                             className={clsx(
                               'h-2.5 rounded-full transition-all duration-300',
                               agent.log_count / maxLogCount > 0.7 ? 'bg-red-500' :
                               agent.log_count / maxLogCount > 0.4 ? 'bg-yellow-500' : 'bg-green-500'
                             )}
-                            style={{ width: `${(agent.log_count / maxLogCount) * 100}%` }}
+                            style={{ width: `${Math.min(100, Math.max(0, (agent.log_count / maxLogCount) * 100))}%` }}
                           />
                         </div>
                       </td>
@@ -852,7 +904,7 @@ export default function LogsByAgentPage() {
             const btnDisabled = 'opacity-40 cursor-not-allowed'
             return (
               <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 truncate">
                   Showing {filteredAndSortedAgents.length === 0 ? 0 : (tablePage - 1) * TABLE_PAGE_SIZE + 1}–{Math.min(tablePage * TABLE_PAGE_SIZE, filteredAndSortedAgents.length)} of {filteredAndSortedAgents.length} agents
                 </p>
                 <div className="flex items-center gap-1">

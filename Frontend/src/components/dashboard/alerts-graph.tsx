@@ -71,31 +71,31 @@ export function AlertsGraph({ data }: AlertsGraphProps) {
   const chartData = build24hChartData(data.hourly_alert_counts);
 
   return (
-    <div className="h-full flex flex-col bg-[#0f172a] rounded-xl shadow-md text-white">
+    <div className="h-full flex flex-col bg-gradient-to-br from-white via-white to-blue-50/40 rounded-xl shadow-[0_2px_12px_-4px_rgba(15,23,42,0.08)] border border-slate-200/70 text-slate-900">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-700/30 to-indigo-700/30 backdrop-blur-sm px-4 py-3 rounded-t-xl">
+      <div className="px-4 py-3 border-b border-slate-200/80">
         <div className="flex items-center space-x-2 mb-1">
-          <div className="w-2 h-2 bg-blue-400 rounded-full"></div>
-          <h3 className="text-base font-medium text-white">
+          <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+          <h3 className="text-base font-semibold text-slate-900">
             Severity Alerts Graph
           </h3>
         </div>
-        <p className="text-xs text-blue-200/80">By Severity (Minor, Major, Critical)</p>
+        <p className="text-xs text-slate-500">By Severity (Minor, Major, Critical)</p>
       </div>
 
       {/* Chart Section */}
       <div className="flex-1 p-4">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData}>
-            <CartesianGrid stroke="#334155" strokeDasharray="3 3" />
-            <XAxis dataKey="hour" stroke="#cbd5e1" tick={{ fill: "#cbd5e1" }} />
+            <CartesianGrid stroke="#cbd5e1" strokeDasharray="3 3" />
+            <XAxis dataKey="hour" stroke="#475569" tick={{ fill: "#475569" }} />
             <YAxis
-              stroke="#cbd5e1"
+              stroke="#475569"
               label={{
                 value: 'Alerts',
                 angle: -90,
                 position: 'insideLeft',
-                fill: '#cbd5e1',
+                fill: '#475569',
               }}
             />
             <Tooltip
@@ -107,14 +107,14 @@ export function AlertsGraph({ data }: AlertsGraphProps) {
                 return `${displayHour}:00 ${period}`;
               }}
               contentStyle={{
-                backgroundColor: '#1e293b',
-                borderColor: '#334155',
-                color: '#f1f5f9',
+                backgroundColor: '#ffffff',
+                borderColor: '#cbd5e1',
+                color: '#0f172a',
               }}
-              labelStyle={{ color: '#93c5fd' }}
+              labelStyle={{ color: '#2563eb' }}
             />
 
-            <Legend wrapperStyle={{ color: '#e2e8f0' }} />
+            <Legend wrapperStyle={{ color: '#475569' }} />
             <Line
               type="monotone"
               dataKey="minor"

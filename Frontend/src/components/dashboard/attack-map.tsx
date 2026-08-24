@@ -506,19 +506,19 @@ const Map2D: React.FC<{
   }, [processedAttacks, memoizedServerLocations, threats, arcs, cleanup]);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-gradient-to-br from-white via-white to-blue-50/40 rounded-2xl border border-slate-200/70 shadow-[0_2px_12px_-4px_rgba(15,23,42,0.08)] p-4">
       <div className="mb-4 flex justify-between items-center">
-        <h3 className="text-lg font-semibold text-white mb-2">Live Attack Vectors & Threat Intelligence</h3>
+        <h3 className="text-lg font-semibold text-slate-900 mb-2">Live Attack Vectors & Threat Intelligence</h3>
         <div className="flex items-center gap-3">
           {isRefreshing && (
-            <div className="flex items-center gap-2 text-xs text-yellow-400">
-              <div className="w-3 h-3 border border-yellow-400 border-t-transparent rounded-full animate-spin"></div>
+            <div className="flex items-center gap-2 text-xs text-yellow-600">
+              <div className="w-3 h-3 border border-yellow-600 border-t-transparent rounded-full animate-spin"></div>
               <span>Updating...</span>
             </div>
           )}
           <button
             onClick={() => window.open('/attack-vectors', '_blank')}
-            className="p-1 text-gray-400 hover:text-white transition-colors duration-200"
+            className="p-1 text-slate-400 hover:text-slate-900 transition-colors duration-200"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
@@ -548,17 +548,17 @@ export function AttackMap() {
   // Only show loading screen on initial load when there's no data
   if (isLoading && attacks.length === 0 && threats.length === 0) {
     return (
-      <div className="w-full h-[600px] bg-gray-800 rounded-lg p-6 border border-gray-700 flex items-center justify-center">
+      <div className="w-full h-[600px] bg-white rounded-2xl p-6 border border-slate-200/80 shadow-sm flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="text-gray-300 mt-4">Loading threat intelligence...</p>
+          <p className="text-slate-600 mt-4">Loading threat intelligence...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="w-full h-[600px] bg-gray-800 rounded-lg p-6 border border-gray-700 relative">
+    <div className="w-full h-[600px] relative">
       {/* Background refresh indicator */}
       {isRefreshing && (
         <div className="absolute top-4 right-4 z-10 bg-blue-600/20 backdrop-blur-sm border border-blue-500/30 rounded-lg px-3 py-2 flex items-center gap-2">

@@ -22,43 +22,6 @@ export default function GeneralSettings({
     setMounted(true);
   }, []);
 
-  // Apply theme whenever settings.theme changes
-  useEffect(() => {
-    if (!mounted) return;
-
-    const root = document.documentElement;
-    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    
-    // Remove existing theme classes
-    root.classList.remove('light', 'dark');
-    
-    // Apply new theme
-    if (settings.theme === 'system') {
-      root.classList.add(systemPrefersDark ? 'dark' : 'light');
-    } else {
-      root.classList.add(settings.theme);
-    }
-
-    // Save theme preference to localStorage
-    localStorage.setItem('theme', settings.theme);
-  }, [settings.theme, mounted]);
-
-  // Listen for system theme changes
-  useEffect(() => {
-    if (!mounted || settings.theme !== 'system') return;
-
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    
-    const handleChange = (e: MediaQueryListEvent) => {
-      const root = document.documentElement;
-      root.classList.remove('light', 'dark');
-      root.classList.add(e.matches ? 'dark' : 'light');
-    };
-
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
-  }, [settings.theme, mounted]);
-
   const updateSettings = (updates: Partial<GeneralSettingsType>) => {
     onSettingsChange({ ...settings, ...updates });
   };
@@ -77,16 +40,6 @@ export default function GeneralSettings({
       setLoading(false);
     }
   };
-
-  // Initialize theme from localStorage on component mount
-  useEffect(() => {
-    if (!mounted) return;
-
-    const savedTheme = localStorage.getItem('theme') as GeneralSettingsType['theme'] | null;
-    if (savedTheme && savedTheme !== settings.theme) {
-      updateSettings({ theme: savedTheme });
-    }
-  }, [mounted]);
 
   const timezones = [
     'UTC',
@@ -212,18 +165,20 @@ export default function GeneralSettings({
             </label>
             <div className="grid grid-cols-3 gap-3">
               {[
-                { value: 'light', label: 'Light', icon: '☀️' },
-                { value: 'dark', label: 'Dark', icon: '🌙' },
-                { value: 'system', label: 'System', icon: '⚙️' }
+                { value: 'light', label: 'Light', icon: '☀️', disabled: false },
+                { value: 'dark', label: 'Dark', icon: '🌙', disabled: true },
+                { value: 'system', label: 'System', icon: '⚙️', disabled: true }
               ].map((theme) => (
                 <button
                   key={theme.value}
-                  onClick={() => updateSettings({ theme: theme.value as any })}
+                  type="button"
+                  disabled={theme.disabled}
+                  onClick={() => !theme.disabled && updateSettings({ theme: theme.value as any })}
                   className={clsx(
                     'flex flex-col items-center p-4 rounded-lg border-2 transition-colors',
-                    settings.theme === theme.value
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                    theme.disabled
+                      ? 'border-gray-200 dark:border-gray-700 opacity-50 cursor-not-allowed'
+                      : 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                   )}
                 >
                   <span className="text-2xl mb-2">{theme.icon}</span>
@@ -234,9 +189,7 @@ export default function GeneralSettings({
               ))}
             </div>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-4">
-              {settings.theme === 'system' 
-                ? 'Theme follows your system preferences' 
-                : `Theme is set to ${settings.theme} mode`}
+              Dark and System themes are currently disabled.
             </p>
           </div>
         </div>

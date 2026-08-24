@@ -98,7 +98,7 @@ const validateRequest = (schema, property = 'body') => {
  * @access  Private (All authenticated users can create tickets)
  */
 router.post('/',
-  rateLimiter({ windowMs: 15 * 60 * 1000, max: 1000 }),
+  rateLimiter({ windowMs: 15 * 60 * 1000, max: 5000 }),
   authorizePermissions(['tickets:create']),
   validateRequest(createTicketValidator, 'body'),
   createTicket

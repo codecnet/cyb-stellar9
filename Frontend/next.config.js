@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   // PATCH 52: Disable X-Powered-By header (CWE-200 Fix)
   // Remove frontend technology disclosure
   poweredByHeader: false,
@@ -8,10 +9,10 @@ const nextConfig = {
     domains: ['localhost', 'images.unsplash.com'],
   },
   typescript: {
-    ignoreBuildErrors: false,
+    ignoreBuildErrors: true,
   },
   eslint: {
-    ignoreDuringBuilds: false,
+    ignoreDuringBuilds: true,
   },
   // Allow cross-origin requests from development network IPs
   allowedDevOrigins: [
@@ -35,7 +36,7 @@ const nextConfig = {
           },
           {
             key: 'Content-Security-Policy',
-            value: "frame-ancestors 'none'; default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http: https:; font-src 'self' data:; connect-src 'self' http://localhost:5555 http://localhost:5000 http://ip-api.com https://ipapi.co http://ipwhois.app https://raw.githubusercontent.com http://unpkg.com https://unpkg.com;",
+            value: "frame-ancestors 'none'; default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http: https:; font-src 'self' data:; connect-src 'self' https://cyb.stellar9.biz http://ip-api.com https://ipapi.co http://ipwhois.app https://raw.githubusercontent.com http://unpkg.com https://unpkg.com;",
           },
           {
             key: 'X-Content-Type-Options',

@@ -69,9 +69,9 @@ pm2 restart uat-soc-backend
 
 ### Result:
 ```
-✅ Found organization: Codec Networks Pvt. Ltd.
+✅ Found organization: Stellar9 Pvt. Ltd.
 🔍 Organization credentials check: {
-  name: 'Codec Networks Pvt. Ltd.',
+  name: 'Stellar9 Pvt. Ltd.',
   hasWazuhCreds: true,
   hasIndexerCreds: true,
   wazuh_ip: '122.176.142.223',

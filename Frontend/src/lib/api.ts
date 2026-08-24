@@ -149,6 +149,10 @@ export const usersApi = {
   },
   
   getActiveUsers: () => apiRequest(`${USERS_BASE_URL}/active`),
+
+  // Current user's own profile. Available to any authenticated user (no
+  // permission gate) and returns only safe organisation fields.
+  getMe: () => apiRequest(`${USERS_BASE_URL}/me`),
   
   getUserById: (id: string) => apiRequest(`${USERS_BASE_URL}/${id}`),
   
@@ -371,8 +375,12 @@ export const wazuhApi = {
     return apiRequest(url);
   },
 
-  getDashboardMetrics: (orgId?: string) => {
-    const url = orgId ? `${WAZUH_BASE_URL}/dashboard-metrics?orgId=${orgId}` : `${WAZUH_BASE_URL}/dashboard-metrics`;
+  getDashboardMetrics: (orgId?: string, hours?: number) => {
+    const params = new URLSearchParams();
+    if (orgId) params.set('orgId', orgId);
+    if (hours !== undefined && hours !== null) params.set('hours', String(hours));
+    const qs = params.toString();
+    const url = qs ? `${WAZUH_BASE_URL}/dashboard-metrics?${qs}` : `${WAZUH_BASE_URL}/dashboard-metrics`;
     return apiRequest(url);
   },
 
@@ -568,6 +576,8 @@ export const ticketsApi = {
     limit?: number;
     assigned_to?: string;
     organisation_id?: string;
+    start_date?: string;
+    end_date?: string;
   }) => {
     const searchParams = new URLSearchParams();
     // Add populate parameter to get organisation details including emails

@@ -82,79 +82,39 @@ export const useThreatData = () => {
   return context;
 };
 
-// IP Geolocation function (same as server.js)
+// IP Geolocation function — resolved via the backend proxy (GET /api/ip-geolocation/:ip).
+// The backend handles the external lookups (ip-api.com / ipapi.co / ipwhois.app) and
+// caching server-side, which avoids mixed-content blocking when the app runs over HTTPS.
 const getIpLocation = async (ip: string): Promise<{ lat: number, lng: number, country: string } | null> => {
-  const services = [
-    // Service 1: ip-api.com (free, no key required)
-    async () => {
-      const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,message,country,lat,lon`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.status === 'success') {
-          return {
-            lat: parseFloat(data.lat) || 0,
-            lng: parseFloat(data.lon) || 0,
-            country: data.country || 'Unknown'
-          };
-        }
+  try {
+    // Add timeout to prevent hanging
+    const timeoutPromise = new Promise<null>((_, reject) =>
+      setTimeout(() => reject(new Error('Timeout')), 5000)
+    );
+
+    const fetchPromise = fetch(`${BASE_URL}/ip-geolocation/${ip}`).then(async (response) => {
+      if (!response.ok) return null;
+      const json = await response.json();
+      const data = json?.data ?? json;
+      if (data && (data.lat || data.lng)) {
+        return {
+          lat: parseFloat(data.lat) || 0,
+          lng: parseFloat(data.lng) || 0,
+          country: data.country || 'Unknown'
+        };
       }
       return null;
-    },
-    // Service 2: ipapi.co (backup)
-    async () => {
-      const response = await fetch(`https://ipapi.co/${ip}/json/`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.latitude && data.longitude) {
-          return {
-            lat: parseFloat(data.latitude) || 0,
-            lng: parseFloat(data.longitude) || 0,
-            country: data.country_name || 'Unknown'
-          };
-        }
-      }
-      return null;
-    },
-    // Service 3: ipwhois.app (free)
-    async () => {
-      const response = await fetch(`http://ipwhois.app/json/${ip}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.latitude && data.longitude) {
-          return {
-            lat: parseFloat(data.latitude) || 0,
-            lng: parseFloat(data.longitude) || 0,
-            country: data.country || 'Unknown'
-          };
-        }
-      }
-      return null;
+    });
+
+    const result = await Promise.race([fetchPromise, timeoutPromise]);
+
+    if (result && result.lat !== 0 && result.lng !== 0) {
+      return result;
     }
-  ];
-
-  // Try each service with timeout
-  for (const [index, service] of Array.from(services.entries())) {
-    try {
-      // console.log(`🌐 Trying geolocation service ${index + 1} for IP: ${ip}`);
-
-      // Add timeout to prevent hanging
-      const timeoutPromise = new Promise<null>((_, reject) =>
-        setTimeout(() => reject(new Error('Timeout')), 5000)
-      );
-
-      const result = await Promise.race([service(), timeoutPromise]);
-
-      if (result && result.lat !== 0 && result.lng !== 0) {
-        // console.log(`✅ Geolocation success with service ${index + 1}:`, result);
-        return result;
-      }
-    } catch (error) {
-      // console.log(`❌ Geolocation service ${index + 1} failed for ${ip}:`, error instanceof Error ? error.message : 'Unknown error');
-      continue;
-    }
+  } catch (error) {
+    // console.log(`❌ Geolocation lookup failed for ${ip}:`, error instanceof Error ? error.message : 'Unknown error');
   }
 
-  // console.log(`❌ All geolocation services failed for IP: ${ip}`);
   return null;
 };
 
@@ -316,9 +276,8 @@ const fetchRealAttackData = async (orgId?: string): Promise<{ attacks: AttackDat
         // Map severity levels to our categories (same as live-alerts-table.tsx)
         let severity: 'minor' | 'major' | 'critical';
         const level = alert.severity || 0;
-        if (level >= 15) severity = 'critical';
-        else if (level >= 11) severity = 'major';
-        else if (level >= 7) severity = 'minor';
+        if (level >= 13) severity = 'critical';
+        else if (level >= 10) severity = 'major';
         else severity = 'minor';
 
         // Determine attack type from rule groups or description
@@ -465,7 +424,10 @@ const generateFallbackAttackData = async (): Promise<{ attacks: AttackData[], se
 // Fetch OTX threat data
 const fetchOTXThreatData = async (): Promise<{ threats: ThreatData[], arcs: ArcData[], cached: boolean }> => {
   try {
-    const response = await fetch('/api/otx-proxy', {
+    // NOTE: served by a Next.js route handler at /otx-proxy (NOT /api/otx-proxy).
+    // On the deployed server nginx proxies /api/* to the Express backend, which would
+    // shadow this route and return a globe-incompatible payload, so it lives outside /api.
+    const response = await fetch('/otx-proxy', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
@@ -477,13 +439,16 @@ const fetchOTXThreatData = async (): Promise<{ threats: ThreatData[], arcs: ArcD
     const isCached = xCacheHeader === 'HIT';
 
     if (response.ok) {
-      const data = await response.json();
-      if (data.success && data.threats && data.arcs) {
-        console.log(`[THREAT INTELLIGENCE] Fetched ${data.threats?.length || 0} threats (Cache: ${xCacheHeader || 'N/A'})`);
+      const json = await response.json();
+      // The backend proxy wraps its payload in ApiResponse ({ data: { threats, arcs, ... } }),
+      // while the local Next.js route returns it flat ({ threats, arcs, ... }). Support both.
+      const payload = (json?.data && (json.data.threats || json.data.arcs)) ? json.data : json;
+      if (payload?.threats && payload?.arcs) {
+        console.log(`[THREAT INTELLIGENCE] Fetched ${payload.threats?.length || 0} threats (Cache: ${xCacheHeader || 'N/A'})`);
         return {
-          threats: data.threats,
-          arcs: data.arcs,
-          cached: isCached || data.data?.cached || false
+          threats: payload.threats,
+          arcs: payload.arcs,
+          cached: isCached || payload.cached || false
         };
       }
     }

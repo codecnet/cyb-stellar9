@@ -19,16 +19,18 @@ export const createTicket = async (ticketData) => {
 export const findTicketById = async (id, populateFields = []) => {
   let query = Ticket.findById(id);
   
-  const defaultPopulate = ['organisation_id', 'user_id', 'related_asset_id'];
+  const defaultPopulate = ['organisation_id', 'user_id', 'related_asset_id', 'created_by', 'updated_by', 'status_changed_by', 'comments.user'];
   const fieldsToPopulate = populateFields.length > 0 ? populateFields : defaultPopulate;
   
   fieldsToPopulate.forEach(field => {
     if (field === 'organisation_id') {
       query = query.populate(field, 'organisation_name client_name emails');
-    } else if (field === 'user_id') {
-      query = query.populate(field, 'username full_name email');
+    } else if (field === 'user_id' || field === 'created_by' || field === 'updated_by' || field === 'status_changed_by') {
+      query = query.populate(field, 'username full_name email display_name');
     } else if (field === 'related_asset_id') {
       query = query.populate(field, 'asset_name asset_tag ip_address');
+    } else if (field === 'comments.user') {
+      query = query.populate(field, 'username full_name email display_name');
     } else {
       query = query.populate(field);
     }
@@ -74,6 +76,9 @@ export const findAllTickets = async (organisationId = null, limit = 0, startDate
     .populate('organisation_id', 'organisation_name client_name emails')
     .populate('user_id', 'username full_name email')
     .populate('created_by', 'username full_name email display_name')
+    .populate('updated_by', 'username full_name email display_name')
+    .populate('status_changed_by', 'username full_name email display_name')
+    .populate('comments.user', 'username full_name email display_name')
     .sort({ createdAt: -1 })
     .limit(limit);
 };

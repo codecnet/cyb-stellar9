@@ -133,8 +133,8 @@ function SIEMPageContent() {
             {isLoading
               ? 'Loading SIEM credentials...'
               : credentials?.organization_name
-                ? `Access the Codec Net SIEM platform for ${credentials.organization_name}`
-                : 'Access the Codec Net SIEM platform for advanced security monitoring'
+                ? `Access the Stellar9 SIEM platform for ${credentials.organization_name}`
+                : 'Access the Stellar9 SIEM platform for advanced security monitoring'
             }
           </p>
         </div>
@@ -199,7 +199,7 @@ function SIEMPageContent() {
             className="w-full inline-flex items-center justify-center px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-all duration-200 shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           >
             <CpuChipIcon className="w-5 h-5 mr-2" />
-            Access Codec Net Portal
+            Access Stellar9 Portal
             <ArrowTopRightOnSquareIcon className="w-4 h-4 ml-2" />
           </button>
         </div>
@@ -279,10 +279,10 @@ function SIEMPageContent() {
       {/* Additional Info */}
       <div className="card-gradient p-6 rounded-xl">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          About Codec Net SIEM
+          About Stellar9 SIEM
         </h3>
         <p className="text-gray-600 dark:text-gray-400 mb-4">
-          Codec Net SIEM is an enterprise-ready security monitoring solution for threat detection,
+          Stellar9 SIEM is an enterprise-ready security monitoring solution for threat detection,
           integrity monitoring, incident response and compliance. It provides unified XDR and SIEM protection
           for endpoints and cloud workloads.
         </p>

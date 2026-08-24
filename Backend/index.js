@@ -9,6 +9,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import database from "./config/database.js";
 import apiRoutes from "./routes/index.js";
+import { vendorNameMiddleware } from "./middlewares/vendorName.middleware.js";
 import { swaggerDocs } from "./swagger.js";
 import { initializeCacheRefresh } from "./services/cacheRefresh.service.js";
 
@@ -29,7 +30,7 @@ const corsOption = {
 };
 
 app.use(cors(corsOption));
-app.use("/api", apiRoutes);
+app.use("/api", vendorNameMiddleware, apiRoutes);
 
 swaggerDocs(app);
 

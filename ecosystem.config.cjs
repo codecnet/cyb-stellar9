@@ -1,0 +1,33 @@
+module.exports = {
+  apps: [
+    {
+      name: 'soc-backend',
+      cwd: '/home/cyb/CYB-Stellar9/Backend',
+      script: 'server.js',
+      interpreter: 'node',
+      env: { NODE_ENV: 'production' },
+      max_memory_restart: '1G',
+      autorestart: true,
+      watch: false,
+      out_file: '/var/log/soc-backend.out.log',
+      error_file: '/var/log/soc-backend.err.log',
+      merge_logs: true,
+      time: true,
+    },
+    {
+      name: 'soc-frontend',
+      cwd: '/home/cyb/CYB-Stellar9/Frontend',
+      script: 'node_modules/next/dist/bin/next',
+      args: 'start -p 3000 -H 127.0.0.1',
+      interpreter: 'node',
+      env: { NODE_ENV: 'production' },
+      max_memory_restart: '1G',
+      autorestart: true,
+      watch: false,
+      out_file: '/var/log/soc-frontend.out.log',
+      error_file: '/var/log/soc-frontend.err.log',
+      merge_logs: true,
+      time: true,
+    },
+  ],
+};

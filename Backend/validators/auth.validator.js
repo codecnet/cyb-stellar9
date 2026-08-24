@@ -189,7 +189,8 @@ export const loginValidator = Joi.object({
   identifier: Joi.alternatives()
     .try(
       Joi.string().email({ minDomainSegments: 2 }),
-      Joi.string().alphanum().min(3).max(30)
+      // Allow usernames with underscore, dot and hyphen (matches username creation policy)
+      Joi.string().pattern(/^[a-zA-Z0-9._-]{3,30}$/)
     )
     .required()
     .messages({

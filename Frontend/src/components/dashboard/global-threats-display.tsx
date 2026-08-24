@@ -81,11 +81,11 @@ export function GlobalThreatsDisplay({ className = '' }: GlobalThreatsDisplayPro
 
   if (isLoading && threats.length === 0) {
     return (
-      <div className={`bg-gray-800 rounded-lg p-6 border border-gray-700 ${className}`}>
+      <div className={`bg-white rounded-lg p-6 border border-slate-200/80 ${className}`}>
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-            <p className="text-gray-300 mt-2">Loading global threats...</p>
+            <p className="text-slate-600 mt-2">Loading global threats...</p>
           </div>
         </div>
       </div>
@@ -94,10 +94,8 @@ export function GlobalThreatsDisplay({ className = '' }: GlobalThreatsDisplayPro
 
   return (
     <div className={`relative overflow-hidden ${className}`}>
-      {/* Modern glass-morphism container */}
-      <div className="bg-gradient-to-br from-gray-900/95 to-gray-800/95 backdrop-blur-xl rounded-2xl border border-gray-600/30 shadow-2xl">
-        {/* Subtle gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-purple-500/5 rounded-2xl"></div>
+      {/* Light card container */}
+      <div className="bg-gradient-to-br from-white via-white to-blue-50/40 rounded-2xl border border-slate-200/70 shadow-[0_2px_12px_-4px_rgba(15,23,42,0.08)]">
         
         <div className="relative p-8">
           {/* Enhanced Header */}
@@ -111,10 +109,10 @@ export function GlobalThreatsDisplay({ className = '' }: GlobalThreatsDisplayPro
               </div>
               
               <div>
-                <h3 className="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                <h3 className="text-2xl font-bold text-slate-900">
                   Global Threat Intelligence
                 </h3>
-                <p className="text-sm text-gray-400 mt-1">Real-time cybersecurity monitoring</p>
+                <p className="text-sm text-slate-500 mt-1">Real-time cybersecurity monitoring</p>
               </div>
               
               {/* Live status */}
@@ -144,8 +142,8 @@ export function GlobalThreatsDisplay({ className = '' }: GlobalThreatsDisplayPro
 
             {lastUpdated && (
               <div className="text-right">
-                <p className="text-xs text-gray-500">Last Updated</p>
-                <p className="text-sm text-gray-300 font-mono">
+                <p className="text-xs text-slate-400">Last Updated</p>
+                <p className="text-sm text-slate-600 font-mono">
                   {lastUpdated.toLocaleTimeString()}
                 </p>
               </div>
@@ -156,7 +154,7 @@ export function GlobalThreatsDisplay({ className = '' }: GlobalThreatsDisplayPro
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <div className="group relative">
               <div className="absolute inset-0 bg-gradient-to-r from-red-500/20 to-pink-500/20 rounded-xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-              <div className="relative bg-gray-800/60 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 hover:border-red-500/30 transition-all duration-300">
+              <div className="relative bg-blue-100/80 rounded-xl p-6 border border-blue-200 hover:border-red-500/30 transition-all duration-300">
                 <div className="flex items-center gap-4">
                   <div className="p-3 bg-red-500/20 rounded-lg">
                     <svg className="w-6 h-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -165,7 +163,7 @@ export function GlobalThreatsDisplay({ className = '' }: GlobalThreatsDisplayPro
                   </div>
                   <div>
                     <div className="text-3xl font-bold text-red-400">{threatStats.total}</div>
-                    <div className="text-sm text-gray-400">Active Threats</div>
+                    <div className="text-sm text-slate-500">Active Threats</div>
                   </div>
                 </div>
               </div>
@@ -173,7 +171,7 @@ export function GlobalThreatsDisplay({ className = '' }: GlobalThreatsDisplayPro
 
             <div className="group relative">
               <div className="absolute inset-0 bg-gradient-to-r from-orange-500/20 to-yellow-500/20 rounded-xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-              <div className="relative bg-gray-800/60 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 hover:border-orange-500/30 transition-all duration-300">
+              <div className="relative bg-blue-100/80 rounded-xl p-6 border border-blue-200 hover:border-orange-500/30 transition-all duration-300">
                 <div className="flex items-center gap-4">
                   <div className="p-3 bg-orange-500/20 rounded-lg">
                     <svg className="w-6 h-6 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -182,7 +180,7 @@ export function GlobalThreatsDisplay({ className = '' }: GlobalThreatsDisplayPro
                   </div>
                   <div>
                     <div className="text-3xl font-bold text-orange-400">{Object.keys(threatStats.byType).length}</div>
-                    <div className="text-sm text-gray-400">Threat Types</div>
+                    <div className="text-sm text-slate-500">Threat Types</div>
                   </div>
                 </div>
               </div>
@@ -190,7 +188,7 @@ export function GlobalThreatsDisplay({ className = '' }: GlobalThreatsDisplayPro
 
             <div className="group relative">
               <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 rounded-xl blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-              <div className="relative bg-gray-800/60 backdrop-blur-sm rounded-xl p-6 border border-gray-700/50 hover:border-blue-500/30 transition-all duration-300">
+              <div className="relative bg-blue-100/80 rounded-xl p-6 border border-blue-200 hover:border-blue-500/30 transition-all duration-300">
                 <div className="flex items-center gap-4">
                   <div className="p-3 bg-blue-500/20 rounded-lg">
                     <svg className="w-6 h-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -199,7 +197,7 @@ export function GlobalThreatsDisplay({ className = '' }: GlobalThreatsDisplayPro
                   </div>
                   <div>
                     <div className="text-3xl font-bold text-blue-400">{Object.keys(threatStats.byCountry).length}</div>
-                    <div className="text-sm text-gray-400">Countries Affected</div>
+                    <div className="text-sm text-slate-500">Countries Affected</div>
                   </div>
                 </div>
               </div>
@@ -216,7 +214,7 @@ export function GlobalThreatsDisplay({ className = '' }: GlobalThreatsDisplayPro
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
                 </div>
-                <h4 className="text-xl font-bold text-white">Current Active Threats</h4>
+                <h4 className="text-xl font-bold text-slate-900">Current Active Threats</h4>
                 <div className="flex-1 h-px bg-gradient-to-r from-cyan-500/50 to-transparent"></div>
               </div>
               
@@ -224,7 +222,7 @@ export function GlobalThreatsDisplay({ className = '' }: GlobalThreatsDisplayPro
                 {threats.slice(0, 10).map((threat, index) => (
                   <div key={index} className="group/item relative">
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-700/20 to-transparent opacity-0 group-hover/item:opacity-100 transition-opacity duration-300 rounded-xl"></div>
-                    <div className="relative bg-gray-800/40 backdrop-blur-sm rounded-xl p-4 border border-gray-700/30 hover:border-gray-600/50 transition-all duration-300">
+                    <div className="relative bg-blue-100/80 rounded-xl p-4 border border-blue-200 hover:border-slate-300 transition-all duration-300">
                       <div className="flex items-start gap-4">
                         <div 
                           className="w-4 h-4 rounded-full animate-pulse mt-1 shadow-lg" 
@@ -234,10 +232,10 @@ export function GlobalThreatsDisplay({ className = '' }: GlobalThreatsDisplayPro
                           }}
                         ></div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-semibold text-white mb-1 truncate">
+                          <div className="text-sm font-semibold text-slate-900 mb-1 truncate">
                             {cleanAttackType(threat.attackType)}
                           </div>
-                          <div className="flex items-center gap-2 text-xs text-gray-400">
+                          <div className="flex items-center gap-2 text-xs text-slate-500">
                             <span className="inline-flex items-center gap-1">
                               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -245,7 +243,7 @@ export function GlobalThreatsDisplay({ className = '' }: GlobalThreatsDisplayPro
                               </svg>
                               {cleanDisplayText(threat.country || 'Unknown')}
                             </span>
-                            <span className="text-gray-500">•</span>
+                            <span className="text-slate-400">•</span>
                             <span className="inline-flex items-center gap-1">
                               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -269,7 +267,7 @@ export function GlobalThreatsDisplay({ className = '' }: GlobalThreatsDisplayPro
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <h4 className="text-xl font-bold text-white">Most Affected Countries</h4>
+                <h4 className="text-xl font-bold text-slate-900">Most Affected Countries</h4>
                 <div className="flex-1 h-px bg-gradient-to-r from-red-500/50 to-transparent"></div>
               </div>
               
@@ -282,19 +280,19 @@ export function GlobalThreatsDisplay({ className = '' }: GlobalThreatsDisplayPro
                     return (
                       <div key={country} className="group/item relative">
                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-red-500/10 to-transparent opacity-0 group-hover/item:opacity-100 transition-opacity duration-300 rounded-xl"></div>
-                        <div className="relative bg-gray-800/40 backdrop-blur-sm rounded-xl p-4 border border-gray-700/30 hover:border-red-500/30 transition-all duration-300">
+                        <div className="relative bg-blue-100/80 rounded-xl p-4 border border-blue-200 hover:border-red-500/30 transition-all duration-300">
                           <div className="flex justify-between items-center mb-3">
                             <div className="flex items-center gap-2">
-                              <span className="text-lg font-semibold text-white/80">#{index + 1}</span>
-                              <span className="text-sm font-medium text-white">{country}</span>
+                              <span className="text-lg font-semibold text-slate-900/80">#{index + 1}</span>
+                              <span className="text-sm font-medium text-slate-900">{country}</span>
                             </div>
                             <div className="text-right">
                               <div className="text-sm font-bold text-red-400">{count}</div>
-                              <div className="text-xs text-gray-400">threats</div>
+                              <div className="text-xs text-slate-500">threats</div>
                             </div>
                           </div>
                           <div className="relative">
-                            <div className="w-full bg-gray-700/50 rounded-full h-2 overflow-hidden">
+                            <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
                               <div 
                                 className="bg-gradient-to-r from-red-500 to-pink-500 h-2 rounded-full transition-all duration-1000 ease-out shadow-lg" 
                                 style={{ 
@@ -303,7 +301,7 @@ export function GlobalThreatsDisplay({ className = '' }: GlobalThreatsDisplayPro
                                 }}
                               ></div>
                             </div>
-                            <div className="absolute right-0 top-3 text-xs text-gray-400">
+                            <div className="absolute right-0 top-3 text-xs text-slate-500">
                               {percentage.toFixed(1)}%
                             </div>
                           </div>

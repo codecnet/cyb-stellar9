@@ -87,9 +87,9 @@ export const getSecurityMetrics = async (req, res) => {
 
     // Step 3: Calculate alert metrics (matching live alerts categorization)
     const severityCounts = {
-      critical: 0, // Level >= 15
-      major: 0,    // Level >= 11 and < 15
-      minor: 0     // Level >= 7 and < 11
+      critical: 0, // Level >= 13
+      major: 0,    // Level 10-12
+      minor: 0     // Level <= 9
     };
 
     const ruleGroupCounts = {};
@@ -99,10 +99,10 @@ export const getSecurityMetrics = async (req, res) => {
       const severity = alert.severity || alert.rule?.level || 1;
       const ruleGroups = alert.rule_groups || alert.rule?.groups?.[0] || 'unknown';
 
-      // Count by severity (same as live alerts: critical ≥15, major ≥11, minor ≥7)
-      if (severity >= 15) severityCounts.critical++;
-      else if (severity >= 11) severityCounts.major++;
-      else if (severity >= 7) severityCounts.minor++;
+      // Count by severity (same as live alerts: critical ≥13, major 10-12, minor ≤9)
+      if (severity >= 13) severityCounts.critical++;
+      else if (severity >= 10) severityCounts.major++;
+      else severityCounts.minor++;
 
       // Track rule groups
       uniqueRuleGroups.add(ruleGroups);

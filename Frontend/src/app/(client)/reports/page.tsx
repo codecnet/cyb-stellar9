@@ -15,6 +15,45 @@ import { FIELD_DESCRIPTIONS } from './components/fieldDescriptions'
 
 const BASE_URL = process.env.NEXT_PUBLIC_RBAC_BASE_IP
 
+// Month options for the Security Reports month filter (used to pick the
+// reporting period for Monthly Reports and to filter the generated list).
+const MONTH_OPTIONS = [
+  { value: '2026-01', label: 'January 2026' },
+  { value: '2026-02', label: 'February 2026' },
+  { value: '2026-03', label: 'March 2026' },
+  { value: '2026-04', label: 'April 2026' },
+  { value: '2026-05', label: 'May 2026' },
+  { value: '2026-06', label: 'June 2026' },
+  { value: '2026-07', label: 'July 2026' },
+  { value: '2026-08', label: 'August 2026' },
+  { value: '2026-09', label: 'September 2026' },
+  { value: '2026-10', label: 'October 2026' },
+  { value: '2026-11', label: 'November 2026' },
+  { value: '2026-12', label: 'December 2026' },
+]
+
+// Month to preselect when the user switches into Month mode: the current
+// month if it is offered, otherwise the latest month available.
+const defaultMonthValue = () => {
+  const now = new Date()
+  const current = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`
+  return MONTH_OPTIONS.some(m => m.value === current)
+    ? current
+    : MONTH_OPTIONS[MONTH_OPTIONS.length - 1]?.value ?? ''
+}
+
+// Given a 'YYYY-MM' value, return the first/last instant of that month in UTC.
+// The boundaries must be UTC: they are sent to the API as ISO strings and the
+// backend renders the report period in UTC. Building them in the browser's
+// local zone shifts the start into the previous month for any zone ahead of
+// UTC (e.g. June would print as "May 31 — June 30" from IST).
+const getMonthRange = (value: string) => {
+  const [year, month] = value.split('-').map(Number)
+  const start = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0))
+  const end = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999))
+  return { start, end }
+}
+
 
 interface Report {
   id: string
@@ -47,12 +86,28 @@ export default function ReportsPage() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [isSavingData, setIsSavingData] = useState(false)
   const { selectedClient, isClientMode } = useClient()
-  const [selectedTemplate, setSelectedTemplate] = useState('executive')
+  // Month mode is persisted across visits, so both the template and the month
+  // have to rehydrate with it or the form reopens in an impossible state.
+  const [selectedTemplate, setSelectedTemplate] = useState(() =>
+    typeof window !== 'undefined' && localStorage.getItem('reports_timeRangeType') === 'month'
+      ? 'monthly'
+      : 'executive'
+  )
+  // Month filter: only meaningful in the 'month' time range mode, where a
+  // 'YYYY-MM' value both filters the generated list and sets the reporting
+  // period. Cleared whenever the mode is Relative or Absolute.
+  const [selectedMonth, setSelectedMonth] = useState(() =>
+    typeof window !== 'undefined' && localStorage.getItem('reports_timeRangeType') === 'month'
+      ? defaultMonthValue()
+      : ''
+  )
 
-  // Time range filters
-  const [timeRangeType, setTimeRangeType] = useState<'relative' | 'absolute'>(() => {
+  // Time range filters. Exactly one mode is active at a time — Month is a
+  // peer of Relative/Absolute, not an extra filter layered on top of them.
+  const [timeRangeType, setTimeRangeType] = useState<'relative' | 'absolute' | 'month'>(() => {
     if (typeof window !== 'undefined') {
-      return (localStorage.getItem('reports_timeRangeType') as any) || 'relative'
+      const saved = localStorage.getItem('reports_timeRangeType')
+      if (saved === 'relative' || saved === 'absolute' || saved === 'month') return saved
     }
     return 'relative'
   })
@@ -76,6 +131,32 @@ export default function ReportsPage() {
     }
     return new Date().toISOString().slice(0, 16)
   })
+
+  // Month mode and the Monthly Report template are two views of the same
+  // choice, so switching either one keeps the other in step. Relative and
+  // Absolute clear the month so the generated-reports list is not left
+  // filtered by a month the user can no longer see.
+  const switchTimeRangeMode = (mode: 'relative' | 'absolute' | 'month') => {
+    setTimeRangeType(mode)
+    if (mode === 'month') {
+      setSelectedTemplate('monthly')
+      setSelectedMonth(prev => prev || defaultMonthValue())
+    } else {
+      setSelectedMonth('')
+      setSelectedTemplate(prev => (prev === 'monthly' ? 'executive' : prev))
+    }
+  }
+
+  const switchTemplate = (template: string) => {
+    setSelectedTemplate(template)
+    if (template === 'monthly') {
+      setTimeRangeType('month')
+      setSelectedMonth(prev => prev || defaultMonthValue())
+    } else if (timeRangeType === 'month') {
+      setTimeRangeType('relative')
+      setSelectedMonth('')
+    }
+  }
 
   // SOC Efficacy Form State
   const [socEfficacyData, setSocEfficacyData] = useState({
@@ -588,7 +669,7 @@ export default function ReportsPage() {
       month: 'short',
       day: 'numeric'
     })
-    const orgName = selectedClient?.name || selectedClient?.organisation_name || 'Codec Networks'
+    const orgName = selectedClient?.name || selectedClient?.organisation_name || 'Stellar9'
 
     // Generate time range description for report name
     let timeRangeDesc = 'All Time'
@@ -605,13 +686,24 @@ export default function ReportsPage() {
       timeRangeDesc = `${from} - ${to}`
     }
 
+    // Month mode: the reporting period is the selected calendar month.
+    const monthOption = MONTH_OPTIONS.find(m => m.value === selectedMonth)
+    if (timeRangeType === 'month') {
+      if (!monthOption) {
+        alert('Please select a month for the Monthly Report.')
+        return
+      }
+      timeRangeDesc = monthOption.label
+    }
+
     const autoGeneratedName = `${orgName} - ${selectedTemplateText} - ${timeRangeDesc} - ${formattedDate}`
 
     // Build report data with time parameters
     const reportData: any = {
       reportName: autoGeneratedName,
       description: formData.get('description') as string,
-      frequency: 'on-demand', // Set to on-demand since we're using custom time ranges
+      // Weekly Report → weekly, Monthly Report → monthly, otherwise on-demand.
+      frequency: selectedTemplate === 'monthly' ? 'monthly' : selectedTemplate === 'executive' ? 'weekly' : 'on-demand',
       template: selectedTemplateText,
     }
 
@@ -629,7 +721,12 @@ export default function ReportsPage() {
     }
 
     // Add time filter parameters if not "All Time"
-    if (timeRangeType === 'relative' && relativeHours > 0) {
+    if (timeRangeType === 'month' && monthOption) {
+      // Monthly Report covers the full selected calendar month.
+      const { start, end } = getMonthRange(selectedMonth)
+      reportData.start_date = start.toISOString()
+      reportData.end_date = end.toISOString()
+    } else if (timeRangeType === 'relative' && relativeHours > 0) {
       const now = new Date();
       const startTime = new Date(now.getTime() - relativeHours * 60 * 60 * 1000);
       reportData.start_date = startTime.toISOString();
@@ -767,6 +864,22 @@ export default function ReportsPage() {
     return date.toLocaleString()
   }
 
+  // Filter the generated reports list by the selected month. A report matches
+  // if it was generated in, or its reporting period falls within, that month.
+  const filteredReports = selectedMonth
+    ? reports.filter((report) => {
+        const { start, end } = getMonthRange(selectedMonth)
+        const inRange = (value?: string) => {
+          if (!value) return false
+          const d = new Date(value)
+          return d >= start && d <= end
+        }
+        return inRange(report.created_at) || inRange(report.report_period_start)
+      })
+    : reports
+
+  const selectedMonthLabel = MONTH_OPTIONS.find(m => m.value === selectedMonth)?.label
+
   return (
     <div className="space-y-8">
       {/* Page Header */}
@@ -804,30 +917,26 @@ export default function ReportsPage() {
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Report Time Range:</span>
               </div>
 
-              {/* Toggle between Relative and Absolute */}
+              {/* One mode at a time: Relative, Absolute or Month */}
               <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 p-1">
-                <button
-                  type="button"
-                  onClick={() => setTimeRangeType('relative')}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                    timeRangeType === 'relative'
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  Relative
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTimeRangeType('absolute')}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                    timeRangeType === 'absolute'
-                      ? 'bg-blue-600 text-white'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  Absolute
-                </button>
+                {([
+                  { mode: 'relative', label: 'Relative' },
+                  { mode: 'absolute', label: 'Absolute' },
+                  { mode: 'month', label: 'Month' },
+                ] as const).map(({ mode, label }) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => switchTimeRangeMode(mode)}
+                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                      timeRangeType === mode
+                        ? 'bg-blue-600 text-white'
+                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
 
               {/* Relative Time Selector */}
@@ -870,6 +979,29 @@ export default function ReportsPage() {
                   </div>
                 </>
               )}
+
+              {/* Month Selector — sets the reporting period and filters the list */}
+              {timeRangeType === 'month' && (
+                <>
+                  <div className="flex items-center space-x-2">
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Month:</label>
+                    <select
+                      name="month"
+                      value={selectedMonth}
+                      onChange={(e) => setSelectedMonth(e.target.value)}
+                      className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">All Months</option>
+                      {MONTH_OPTIONS.map((m) => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    Covers the full calendar month — no other time range needed.
+                  </span>
+                </>
+              )}
             </div>
           </div>
 
@@ -882,11 +1014,12 @@ export default function ReportsPage() {
               name="template"
               required
               value={selectedTemplate}
-              onChange={(e) => setSelectedTemplate(e.target.value)}
+              onChange={(e) => switchTemplate(e.target.value)}
               className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 rounded-xl
                              focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 dark:focus:border-blue-400
                              text-gray-900 dark:text-white transition-all duration-200">
-              <option value="executive">Executive Summary</option>
+              <option value="executive">Weekly Report</option>
+              <option value="monthly">Monthly Report</option>
               <option value="SOC Efficacy">SOC Efficacy</option>
             </select>
           </div>
@@ -1023,7 +1156,7 @@ export default function ReportsPage() {
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
             <p className="text-sm text-blue-800 dark:text-blue-200">
               <strong>Report Name:</strong> Will be auto-generated as: <br />
-              <span className="font-mono text-xs">{selectedClient?.name || selectedClient?.organisation_name || 'Codec Networks'} - [Template] - [Time Range] - [Date]</span>
+              <span className="font-mono text-xs">{selectedClient?.name || selectedClient?.organisation_name || 'Stellar9'} - [Template] - [Time Range] - [Date]</span>
             </p>
           </div>
 
@@ -1052,19 +1185,21 @@ export default function ReportsPage() {
           <div className="text-center py-12">
             <p className="text-gray-500 dark:text-gray-400">Loading reports...</p>
           </div>
-        ) : reports.length > 0 ? (
+        ) : filteredReports.length > 0 ? (
           <div className="space-y-6">
             <div>
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
                 Generated Reports
               </h2>
               <p className="text-gray-600 dark:text-gray-400">
-                Your organization's security reports
+                {selectedMonthLabel
+                  ? `Your organization's security reports for ${selectedMonthLabel}`
+                  : "Your organization's security reports"}
               </p>
             </div>
 
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
-            {reports.map((report) => (
+            {filteredReports.map((report) => (
               <div
                 key={report.id}
                 className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6"
@@ -1139,7 +1274,11 @@ export default function ReportsPage() {
       ) : (
         <div className="text-center py-12 bg-gray-50 dark:bg-gray-800 rounded-lg">
           <DocumentTextIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-500 dark:text-gray-400">No reports generated yet</p>
+          <p className="text-gray-500 dark:text-gray-400">
+            {selectedMonthLabel && reports.length > 0
+              ? `No reports for ${selectedMonthLabel}`
+              : 'No reports generated yet'}
+          </p>
         </div>
       )}
       </PermissionGate>

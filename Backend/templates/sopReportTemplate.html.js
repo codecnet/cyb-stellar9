@@ -136,7 +136,7 @@ export function generateSopHtmlReport(sop) {
 <body>
     <div class="container">
         <div class="header">
-            <div class="logo">CODEC <span>NET</span></div>
+            <div class="logo">STELLAR<span>9</span></div>
             <div class="subtitle">Playbooks & Standard Operating Procedures</div>
             <h1 class="sop-title">${escapeHtml(sop.title)}</h1>
             <p class="sop-name">${escapeHtml(sop.sop_name)}</p>
@@ -153,7 +153,7 @@ export function generateSopHtmlReport(sop) {
             <div class="content">${sop.description}</div>
         </div>
         <div class="footer">
-            <div class="footer-logo">CODEC NET</div>
+            <div class="footer-logo">STELLAR9</div>
             <div>AI-Powered Security Operations Center</div>
             <div>Document ID: ${sop._id}</div>
             <div class="confidential">Confidential Document</div>

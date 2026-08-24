@@ -238,7 +238,7 @@ export const getMitreCoverage = asyncHandler(async (req, res) => {
             {
               range: {
                 'rule.level': {
-                  gte: 8
+                  gte: parseInt(process.env.WAZUH_MIN_ALERT_LEVEL) || 8
                 }
               }
             }

@@ -16,7 +16,9 @@ export default function RiskMatrixPage() {
   // Persist view selection in localStorage
   const [view, setView] = useState<'3d' | 'metrics' | 'prototype' | 'mitre'>(() => {
     if (typeof window !== 'undefined') {
-      return (localStorage.getItem('riskMatrix_view') as any) || '3d'
+      // Prototype View is hidden; fall back to 3D for anyone who had it persisted.
+      const saved = localStorage.getItem('riskMatrix_view')
+      return (saved && saved !== 'prototype' ? saved : '3d') as any
     }
     return '3d'
   })
@@ -92,6 +94,7 @@ export default function RiskMatrixPage() {
           >
             Security Metrics
           </button>
+          {/* Prototype View hidden
           <button
             onClick={() => setView('prototype')}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -102,6 +105,7 @@ export default function RiskMatrixPage() {
           >
             Prototype View
           </button>
+          */}
           <button
             onClick={() => setView('mitre')}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -118,7 +122,7 @@ export default function RiskMatrixPage() {
       {/* Render selected view */}
       {view === '3d' && <RiskMatrix3D />}
       {view === 'metrics' && <SecurityMetrics />}
-      {view === 'prototype' && <RiskMatrix />}
+      {/* Prototype View hidden: {view === 'prototype' && <RiskMatrix />} */}
       {view === 'mitre' && <MitreAttack />}
     </div>
   )

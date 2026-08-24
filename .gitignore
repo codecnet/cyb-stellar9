@@ -137,3 +137,14 @@ certs/
 *.cert
 *.p12
 *.pfx
+
+# Build-output backups / rollback copies (created during deploys)
+.next.bak*
+.next.rollback*
+
+# Timestamped working-file backups
+*.bak-*
+
+# Generated client reports — contain real client data, never commit
+Backend/storage/reports/
+Backend/storage/Sops/

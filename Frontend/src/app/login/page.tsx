@@ -1,247 +1,83 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import toast from 'react-hot-toast'
 import { isAuthenticated, setAuthSession } from '@/lib/auth'
-import { ShieldExclamationIcon } from '@heroicons/react/24/outline'
+import { SignInPage } from '@/components/ui/sign-in'
 
-const BASE_URL = process.env.NEXT_PUBLIC_RBAC_BASE_IP || 'http://localhost:5000/api' // SIEM-dev backend URL
-import {
-  ShieldCheckIcon,
-  EyeIcon,
-  EyeSlashIcon,
-  LockClosedIcon,
-  UserIcon,
-  ExclamationCircleIcon,
-} from '@heroicons/react/24/outline'
+const BASE_URL = process.env.NEXT_PUBLIC_RBAC_BASE_IP || 'http://localhost:5000/api'
 
 export default function LoginPage() {
   const router = useRouter()
-  const [sessionMessage, setSessionMessage] = useState('')
 
   useEffect(() => {
     if (isAuthenticated()) {
       router.replace('/')
       return
     }
-    // Read ?reason= from URL and display as session-expired banner
     const params = new URLSearchParams(window.location.search)
     const reason = params.get('reason')
-    if (reason) setSessionMessage(decodeURIComponent(reason))
+    if (reason) {
+      toast(decodeURIComponent(reason), { icon: '⚠️', duration: 5000 })
+    }
   }, [router])
 
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState('')
+  const handleSignIn = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+    const email = ((formData.get('email') as string) || '').trim()
+    const password = (formData.get('password') as string) || ''
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError('')
-
-    if (!username || !password) {
-      setError('Email and password are required.')
-      setIsLoading(false)
+    if (!email || !password) {
+      toast.error('Email and password are required.')
       return
     }
 
+    const loadingId = toast.loading('Authenticating...')
     try {
       const res = await fetch(`${BASE_URL}/auth/login`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          identifier: username,
-          password: password,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: email, password }),
       })
-
-
       const data = await res.json()
-      console.log('API Response:', data) // Debug logging
+      toast.dismiss(loadingId)
 
-      if (res.ok) {
-        if (data.data && data.data.user && data.data.access_token) {
-          setAuthSession(data.data.user, data.data.access_token)
-          router.replace('/')
-        } else {
-          console.error('Invalid response structure:', data)
-          setError('Invalid response from server')
-        }
+      if (res.ok && data?.data?.user && data?.data?.access_token) {
+        setAuthSession(data.data.user, data.data.access_token)
+        toast.success(data.message || 'Welcome back')
+        router.replace('/')
       } else {
-        setError(data.message || 'Login failed')
+        toast.error(data?.message || 'Login failed')
       }
     } catch (err) {
+      toast.dismiss(loadingId)
       console.error(err)
-      setError('Something went wrong. Please try again.')
-    } finally {
-      setIsLoading(false)
+      toast.error('Something went wrong. Please try again.')
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Enhanced Background Elements */}
-      <div className="absolute inset-0 overflow-hidden">
-        {/* Animated background grid */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:4rem_4rem] opacity-20"></div>
-
-        {/* Floating particles */}
-        <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-blue-400 rounded-full opacity-60 animate-pulse"></div>
-        <div className="absolute top-3/4 right-1/4 w-1 h-1 bg-purple-400 rounded-full opacity-40 animate-pulse delay-1000"></div>
-        <div className="absolute top-1/2 left-3/4 w-1.5 h-1.5 bg-cyan-400 rounded-full opacity-50 animate-pulse delay-2000"></div>
-
-        {/* Gradient orbs */}
-        <div className="absolute top-0 right-0 w-96 h-96 bg-gradient-radial from-blue-600/10 to-transparent rounded-full blur-3xl"></div>
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-gradient-radial from-purple-600/10 to-transparent rounded-full blur-3xl"></div>
-
-        {/* Moving background elements */}
-        <div className="absolute inset-0">
-          <div className="absolute top-1/3 -left-24 w-48 h-48 bg-gradient-to-r from-blue-500/5 to-purple-500/5 rounded-full blur-xl animate-float"></div>
-          <div className="absolute bottom-1/3 -right-24 w-64 h-64 bg-gradient-to-r from-purple-500/5 to-cyan-500/5 rounded-full blur-xl animate-float delay-1000"></div>
-        </div>
-      </div>
-
-      <div className="w-full max-w-md relative z-10">
-        {/* Main Login Card */}
-        <div className="bg-gray-800/90 backdrop-blur-xl border border-gray-600/50 rounded-2xl shadow-2xl p-8 relative">
-          {/* Subtle inner glow */}
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 to-purple-500/5 rounded-2xl"></div>
-
-          <div className="relative z-10">
-            {/* Header */}
-            <div className="text-center mb-8">
-              {/* Commented out original logo */}
-              {/* <div className="flex justify-center mb-6">
-                <div className="relative">
-                  <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/25">
-                    <ShieldCheckIcon className="w-10 h-10 text-white" />
-                  </div>
-                  <div className="absolute -inset-2 bg-gradient-to-r from-blue-600/20 to-purple-600/20 rounded-2xl blur-lg"></div>
-                </div>
-              </div> */}
-              
-              {/* CodecNet SVG Logo */}
-              <div className="flex justify-center mb-6">
-                <img 
-                  src="/CodecNet.svg" 
-                  alt="Codec Net Logo" 
-                  className="h-24 w-auto"
-                />
-              </div>
-              
-              {/* Commented out original title */}
-              {/* <h1 className="text-3xl font-bold text-white mb-3 bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-300">
-                Codec Networks
-              </h1> */}
-              {/* <p className="text-gray-400 text-base font-medium">
-                Security Operations Center
-              </p>
-              <p className="text-gray-500 text-sm mt-2">
-                Please sign in to access your dashboard
-              </p> */}
-            </div>
-
-            {/* Session expired banner */}
-            {sessionMessage && (
-              <div className="flex items-start space-x-3 text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-6 backdrop-blur-sm animate-fade-in">
-                <ShieldExclamationIcon className="h-5 w-5 flex-shrink-0 mt-0.5" />
-                <span className="text-sm font-medium">{sessionMessage}</span>
-              </div>
-            )}
-
-            {/* Form */}
-            <form onSubmit={handleLogin} className="space-y-6">
-              {/* Username Field */}
-              <div className="space-y-2">
-                <label className="text-base font-medium text-gray-300">Username</label>
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <UserIcon className="h-5 w-5 text-gray-500 group-focus-within:text-blue-400 transition-colors" />
-                  </div>
-                  <input
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    autoComplete='username'
-                    className="w-full pl-12 pr-4 py-4 bg-gray-700/50 backdrop-blur-sm border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300"
-                    placeholder="Enter your username"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Password Field */}
-              <div className="space-y-2">
-                <label className="text-base font-medium text-gray-300">Password</label>
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <LockClosedIcon className="h-5 w-5 text-gray-500 group-focus-within:text-blue-400 transition-colors" />
-                  </div>
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    autoComplete="current-password"
-                    className="w-full pl-12 pr-14 py-4 bg-gray-700/50 backdrop-blur-sm border border-gray-600/50 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-300"
-                    placeholder="Enter your password"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-gray-300 transition-colors"
-                  >
-                    {showPassword ? (
-                      <EyeSlashIcon className="h-5 w-5" />
-                    ) : (
-                      <EyeIcon className="h-5 w-5" />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Error Message */}
-              {error && (
-                <div className="flex items-center space-x-3 text-red-300 bg-red-500/10 border border-red-500/20 rounded-xl p-4 backdrop-blur-sm animate-fade-in">
-                  <ExclamationCircleIcon className="h-5 w-5 flex-shrink-0" />
-                  <span className="text-sm font-medium">{error}</span>
-                </div>
-              )}
-
-              {/* Login Button */}
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-gray-600 disabled:to-gray-700 text-white font-semibold py-4 px-4 rounded-xl transition-all duration-300 shadow-lg shadow-blue-500/25 hover:shadow-xl hover:shadow-blue-500/30 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-[0.98] relative overflow-hidden group"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-600/0 via-white/10 to-purple-600/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                {isLoading ? (
-                  <div className="flex items-center justify-center space-x-3 relative z-10">
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    <span>Authenticating...</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center space-x-3 relative z-10">
-                    <ShieldCheckIcon className="w-5 h-5" />
-                    <span>Sign In</span>
-                  </div>
-                )}
-              </button>
-
-              {/* Info Text */}
-              {/* <div className="text-center pt-4 border-t border-gray-600/50">
-                <p className="text-gray-500 text-xs">
-                  Access level determined by user role and permissions
-                </p>
-              </div> */}
-            </form>
-          </div>
-        </div>
-      </div>
+    <div className="bg-background text-foreground">
+      <SignInPage
+        title={
+          <span className="block text-center">
+            <img
+              src="/cyb-logo.png"
+              alt="CYB — Check Your Breach by Stellar9"
+              className="mx-auto h-24 w-auto"
+            />
+          </span>
+        }
+        description={
+          <span className="block text-center text-muted-foreground">
+            Sign in to your Security Operations Center
+          </span>
+        }
+        heroImageSrc="https://images.unsplash.com/photo-1642615835477-d303d7dc9ee9?w=2160&q=80"
+        onSignIn={handleSignIn}
+      />
     </div>
   )
-} 
+}

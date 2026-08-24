@@ -19,9 +19,10 @@ export function ClientModeGuard({ children }: ClientModeGuardProps) {
 
     // Skip redirects if user is not authenticated
     if (!user) return
+    const orgId = (user as any).organisation?.id || user.organisation_id
 
     // If user needs client selection but hasn't selected one, and not on overview, login, settings, or playbooks-sops page
-    if (isClientMode && !selectedClient && pathname !== '/overview' && pathname !== '/login' && pathname !== '/settings' && pathname !== '/playbooks-sops') {
+    if (isClientMode && !selectedClient && !orgId && pathname !== '/overview' && pathname !== '/login' && pathname !== '/settings' && pathname !== '/playbooks-sops') {
       router.push('/overview')
       return
     }

@@ -1,6 +1,6 @@
 # Fortify Audit - Complete Status Report
 
-**Project**: SOC Dashboard (Codec Net)
+**Project**: SOC Dashboard (Stellar9)
 **Total Lines of Code**: 72,385
 **Files Analyzed**: 261
 **Total Issues**: 89

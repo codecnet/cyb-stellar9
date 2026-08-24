@@ -9,9 +9,10 @@
  */
 
 function generateSeverityBadge(severity) {
+    const sev = severity || 'minor';
     const map = { critical: 'severity-critical', major: 'severity-major', minor: 'severity-minor' };
-    const cls = map[severity] || 'severity-minor';
-    return `<span class="severity-badge ${cls}">${severity.charAt(0).toUpperCase() + severity.slice(1)}</span>`;
+    const cls = map[sev] || 'severity-minor';
+    return `<span class="severity-badge ${cls}">${sev.charAt(0).toUpperCase() + sev.slice(1)}</span>`;
 }
 
 function generateTopAlertsTable(topAlerts) {
@@ -22,10 +23,10 @@ function generateTopAlertsTable(topAlerts) {
     <tr>
       <td>${i + 1}</td>
       <td>${generateSeverityBadge(a.severity)}</td>
-      <td>${a.description}</td>
-      <td>${a.host}</td>
-      <td>${a.count}</td>
-      <td>${a.last_seen}</td>
+      <td>${a.description || 'N/A'}</td>
+      <td>${a.host || 'Unknown'}</td>
+      <td>${a.count ?? 0}</td>
+      <td>${a.last_seen || 'N/A'}</td>
     </tr>`).join('');
 }
 
@@ -63,21 +64,28 @@ function generateAgentCard(agent) {
       </div>
       <div class="agent-detail">OS: ${agent.os || 'Unknown'}</div>
       <div class="agent-detail">IP: ${agent.ip || 'N/A'}</div>
-      <div class="agent-detail">Version: ${agent.version || 'Unknown'}</div>
+      <div class="agent-detail">Version: ${String(agent.version || 'Unknown').split('Wazuh v').join('CYB v')}</div>
       ${agent.lastKeepAlive ? `<div class="agent-detail">Last Seen: ${new Date(agent.lastKeepAlive).toLocaleString()}</div>` : ''}
     </div>`;
 }
 
 export function generateHtmlReport(clientName, organisationName, statistics, reportName = '', frequency = 'weekly', template = 'executive') {
-    const reportPeriod = statistics.report_period || {};
-    const severityCounts = statistics.severity_counts || {};
-    const severityPct = statistics.severity_percentages || {};
-    const topAlerts = statistics.top_alerts || [];
-    const dailyTrend = statistics.daily_trend || {};
-    const alertTypes = statistics.alert_types || [];
-    const agentSummary = statistics.agent_summary || {};
-    const agentsList = statistics.agents_list || [];
-    const cisData = statistics.cis_compliance || {};
+    // Guard against null/undefined params so the template never prints "undefined"
+    clientName = clientName || 'Client';
+    organisationName = organisationName || 'Organization';
+    frequency = frequency || 'weekly';
+    template = template || 'executive';
+    const stats = statistics || {};
+
+    const reportPeriod = stats.report_period || {};
+    const severityCounts = stats.severity_counts || {};
+    const severityPct = stats.severity_percentages || {};
+    const topAlerts = stats.top_alerts || [];
+    const dailyTrend = stats.daily_trend || {};
+    const alertTypes = stats.alert_types || [];
+    const agentSummary = stats.agent_summary || {};
+    const agentsList = stats.agents_list || [];
+    const cisData = stats.cis_compliance || {};
 
     const periodStr = reportPeriod.end_date
         ? `${reportPeriod.start_date || 'N/A'} — ${reportPeriod.end_date}`
@@ -93,7 +101,7 @@ export function generateHtmlReport(clientName, organisationName, statistics, rep
 
     // ── Alert type stat cards ─────────────────────────────────────────────────
     const alertTypeCards = alertTypes.slice(0, 10)
-        .map(at => generateStatCard(at.type, at.count)).join('');
+        .map(at => generateStatCard(at.type || 'Unknown', at.count ?? 0)).join('');
 
     // ── Agent detail cards (limit 12) ─────────────────────────────────────────
     const agentsCardsHtml = agentsList.slice(0, 100)
@@ -103,7 +111,7 @@ export function generateHtmlReport(clientName, organisationName, statistics, rep
     let cisItemsHtml = '';
     if (cisData.policies && cisData.policies.length > 0) {
         cisItemsHtml = cisData.policies
-            .map(p => generateCisItem(p.name, p.score, p.passed || 0, p.failed || 0))
+            .map(p => generateCisItem(p.name || 'Unknown Policy', p.score ?? 0, p.passed || 0, p.failed || 0))
             .join('');
     } else {
         cisItemsHtml = generateStatCard('No CIS compliance data available', '—');
@@ -113,19 +121,20 @@ export function generateHtmlReport(clientName, organisationName, statistics, rep
     let agentsCisHtml = '';
     if (cisData.agents_sca && cisData.agents_sca.length > 0) {
         agentsCisHtml = cisData.agents_sca.map((a, i) => {
-            const col = a.score >= 80 ? '#22c55e' : a.score >= 60 ? '#f97316' : '#ef4444';
+            const score = a.score ?? 0;
+            const col = score >= 80 ? '#22c55e' : score >= 60 ? '#f97316' : '#ef4444';
             return `
         <div class="stat-card agent-compliance-card">
           <div style="flex:1;">
-            <span class="stat-label">${i + 1}. ${a.agent_name}</span>
+            <span class="stat-label">${i + 1}. ${a.agent_name || 'Unknown'}</span>
             <div style="font-size:11px;color:#64748b;margin-top:4px;">
-              ${a.total_passed} passed, ${a.total_failed} failed (${a.policies_count} policies)
+              ${a.total_passed ?? 0} passed, ${a.total_failed ?? 0} failed (${a.policies_count ?? 0} policies)
             </div>
           </div>
           <div style="text-align:right;">
-            <div class="stat-value" style="font-size:22px;color:${col};">${a.score}%</div>
+            <div class="stat-value" style="font-size:22px;color:${col};">${score}%</div>
             <div class="progress-bar" style="width:90px;margin-top:6px;">
-              <div class="progress-fill" style="width:${a.score}%;background:${col};"></div>
+              <div class="progress-fill" style="width:${score}%;background:${col};"></div>
             </div>
           </div>
         </div>`;
@@ -708,7 +717,7 @@ export function generateHtmlReport(clientName, organisationName, statistics, rep
 <!-- ═══════════════════════════════════════════════════════════ -->
 <div class="page cover-page">
   <div class="page-content">
-    <div class="logo">CODEC <span>NET</span></div>
+    <div class="logo">STELLAR<span>9</span></div>
     <h1 class="report-title">Security Operations Center</h1>
     <!-- <h2 class="report-subtitle">${frequency.charAt(0).toUpperCase() + frequency.slice(1)} Report</h2> -->
 
@@ -909,7 +918,8 @@ export function generateHtmlReport(clientName, organisationName, statistics, rep
 
 </body>
 </html>`;
-<<<<<<< HEAD
+
+    return html;
 }
 
 /**
@@ -917,7 +927,13 @@ export function generateHtmlReport(clientName, organisationName, statistics, rep
  * Based on SEBI CSCRF Tables 28-34
  */
 export function generateSocEfficacyReport(organisationName, reportPeriod, scoreData, rawData) {
-  const { final_score, domains } = scoreData;
+  // Guard against null/undefined inputs
+  organisationName = organisationName || 'Organization';
+  reportPeriod = reportPeriod || {};
+  scoreData = scoreData || {};
+  rawData = rawData || {};
+  const final_score = scoreData.final_score ?? 0;
+  const domains = scoreData.domains || [];
   const startDate = reportPeriod.start || 'N/A';
   const endDate = reportPeriod.end || 'N/A';
   const generationDate = new Date().toLocaleDateString('en-US', {
@@ -1356,7 +1372,7 @@ export function generateSocEfficacyReport(organisationName, reportPeriod, scoreD
     <!-- Page 1: Cover Page -->
     <div class="page cover-page">
         <div class="page-content">
-            <div class="logo">CODEC <span>NET</span></div>
+            <div class="logo">STELLAR<span>9</span></div>
             <h1 class="report-title">SOC Efficacy Report</h1>
             <h2 class="report-subtitle">SEBI Cybersecurity and Cyber Resilience Framework</h2>
 
@@ -1721,13 +1737,8 @@ export function generateSocEfficacyReport(organisationName, reportPeriod, scoreD
     </div>
 
     <div class="running-footer">
-        Codec Networks SOC | SOC Efficacy Report | SEBI CSCRF | Confidential
+        Stellar9 SOC | SOC Efficacy Report | SEBI CSCRF | Confidential
     </div>
 </body>
 </html>`;
 }
-=======
-
-return html.replace(/wazuh/gi, 'codecnet');
-}
->>>>>>> 9ab3c55f3a98d26b16549d6c64bc5b52950cd2da

@@ -15,6 +15,8 @@ import { clsx } from 'clsx';
 import { User, Role } from '../types';
 import Cookies from 'js-cookie';
 
+const BASE_URL = process.env.NEXT_PUBLIC_RBAC_BASE_IP || 'http://localhost:5000/api';
+
 // A simple type for the organization list
 interface Organisation {
   _id: string;
@@ -276,7 +278,7 @@ function UserModal({ isOpen, onClose, user, roles, onSave }: UserModalProps) {
       }
       try {
         console.log("Fetching organisations...");
-        const res = await fetch('http://localhost:5000/api/organisations', {
+        const res = await fetch(`${BASE_URL}/organisations`, {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Cache-Control': 'no-cache'
@@ -546,7 +548,7 @@ function UserModal({ isOpen, onClose, user, roles, onSave }: UserModalProps) {
     }
 
     try {
-      const apiUrl = isEditing ? `http://localhost:5000/api/users/${user?.id}` : 'http://localhost:5000/api/users';
+      const apiUrl = isEditing ? `${BASE_URL}/users/${user?.id}` : `${BASE_URL}/users`;
       const method = isEditing ? 'PUT' : 'POST';
 
       console.log('Making request to:', apiUrl, 'with payload:', payload);

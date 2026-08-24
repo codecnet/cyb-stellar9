@@ -32,32 +32,34 @@ const getFrequencyDays = (frequency) => {
 
 // Get severity level from numeric value
 const getSeverityLevel = (level) => {
-  if (level >= 15) return 'critical';
-  if (level >= 12) return 'major';
+  if (level >= 13) return 'critical';
+  if (level >= 10) return 'major';
   return 'minor';
 };
 
-// Format date
+// Format date. Rendered in UTC to match the ISO instants the client sends as
+// the report period — using server-local time shifts the printed boundary by a
+// day whenever the two zones disagree.
 const formatDate = (date, long = false) => {
   if (long) {
-    const options = { year: 'numeric', month: 'long', day: 'numeric' };
+    const options = { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' };
     return date.toLocaleDateString('en-US', options);
   } else {
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const year = String(date.getFullYear()).slice(-2);
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const year = String(date.getUTCFullYear()).slice(-2);
     return `${month}/${day}/${year}`;
   }
 };
 
 // Format date and time
 const formatDateTime = (date) => {
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const year = String(date.getFullYear()).slice(-2);
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const year = String(date.getUTCFullYear()).slice(-2);
 
-  let hours = date.getHours();
-  const minutes = String(date.getMinutes()).padStart(2, '0');
+  let hours = date.getUTCHours();
+  const minutes = String(date.getUTCMinutes()).padStart(2, '0');
   const ampm = hours >= 12 ? 'PM' : 'AM';
   hours = hours % 12 || 12;
 
@@ -265,8 +267,8 @@ async function generateSocEfficacyReportHandler(req, res, params) {
 
   // Prepare report period
   const reportPeriod = {
-    start: start_date ? new Date(start_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A',
-    end: end_date ? new Date(end_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'
+    start: start_date ? new Date(start_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }) : 'N/A',
+    end: end_date ? new Date(end_date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }) : 'N/A'
   };
 
   // Generate HTML report
@@ -424,7 +426,7 @@ const generateReport = asyncHandler(async (req, res) => {
 
     // Fetch alert statistics from Wazuh Indexer using aggregations (fast — single request)
     const mustClauses = [
-      { range: { 'rule.level': { gte: 8 } } }
+      { range: { 'rule.level': { gte: parseInt(process.env.WAZUH_MIN_ALERT_LEVEL) || 8 } } }
     ];
     if (hasDateFilter) {
       mustClauses.unshift({
@@ -449,9 +451,9 @@ const generateReport = asyncHandler(async (req, res) => {
           range: {
             field: 'rule.level',
             ranges: [
-              { key: 'minor', from: 8, to: 12 },
-              { key: 'major', from: 12, to: 15 },
-              { key: 'critical', from: 15, to: 100 }
+              { key: 'minor', to: 10 },
+              { key: 'major', from: 10, to: 13 },
+              { key: 'critical', from: 13, to: 100 }
             ]
           }
         },

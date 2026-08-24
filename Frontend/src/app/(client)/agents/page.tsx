@@ -1051,12 +1051,12 @@ export default function AgentsPage() {
   // if (loading) return <div>Loading agent data...</div>;
   if (fetchError) {
     return (
-      <div className="space-y-8">
+      <div className="space-y-5">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
             Agents Overview
           </h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
+          <p className="mt-1.5 text-sm text-slate-600">
             Monitor and manage security agents across your infrastructure
           </p>
         </div>
@@ -1070,7 +1070,7 @@ export default function AgentsPage() {
               </h3>
               <p className="text-yellow-800 dark:text-yellow-300 mb-4">
                 {fetchError.includes('organization') || fetchError.includes('credentials')
-                  ? 'Please select a client organization from the client overview page to view agents, or ensure at least one organization has Wazuh credentials configured.'
+                  ? 'Please select a client organization from the client overview page to view agents, or ensure at least one organization has CYB credentials configured.'
                   : fetchError
                 }
               </p>
@@ -1096,22 +1096,22 @@ export default function AgentsPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
             Agents Overview
           </h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
+          <p className="mt-1.5 text-sm text-slate-600">
             Monitor and manage security agents across your infrastructure
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           {/* Cache Status Indicator */}
           {cacheStatus.cached && cacheStatus.timestamp && !loading && (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-green-100 dark:bg-green-900/30 rounded-lg">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-xs text-green-700 dark:text-green-400">
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-50 border border-emerald-200 rounded-lg">
+              <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+              <span className="text-xs text-emerald-700 font-medium">
                 Cached • {cacheStatus.timestamp}
               </span>
             </div>
@@ -1119,86 +1119,59 @@ export default function AgentsPage() {
 
           <button
             onClick={fetchAgents}
-            className="inline-flex px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition"
+            className={clsx(
+              'inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200',
+              'bg-[#4f6ddf] hover:bg-[#4360d2] text-white',
+              'shadow-[0_4px_12px_-2px_rgba(79,109,223,0.4)] hover:shadow-[0_6px_16px_-2px_rgba(79,109,223,0.5)] hover:-translate-y-0.5',
+              'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0'
+            )}
             disabled={loading}
             title={cacheStatus.cached ? "Refresh (bypass cache)" : "Refresh agents"}
           >
-            <ArrowPathIcon className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            <ArrowPathIcon className={clsx('w-4 h-4', loading && 'animate-spin')} />
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>
         </div>
-
-
-        {/* <button
-          onClick={() => setShowAddModal(true)}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
-        >
-          <PlusIcon className="w-4 h-4 mr-2" />
-          Add Agent
-        </button> */}
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">Total Agents</p>
-              <p className="text-3xl font-bold mt-1 text-gray-900 dark:text-white">{totalAgents}</p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: 'Total Agents', value: totalAgents, Icon: ServerIcon },
+          { label: 'Active Agents', value: activeAgents, Icon: CheckCircleIcon },
+          { label: 'Critical', value: criticalAgents, Icon: ExclamationTriangleIcon },
+          { label: 'Disconnected', value: disconnectedAgents, Icon: XCircleIcon },
+        ].map(({ label, value, Icon }) => (
+          <div
+            key={label}
+            className="group flex flex-col gap-2 rounded-xl bg-gradient-to-br from-[#4f6ddf]/8 via-white to-[#4f6ddf]/12 border border-slate-200/60 p-3 shadow-[0_4px_16px_-6px_rgba(79,109,223,0.15)] transition-all duration-200 hover:border-[#4f6ddf]/40 hover:shadow-[0_10px_30px_-8px_rgba(79,109,223,0.28)] hover:-translate-y-0.5"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-[#4f6ddf] shadow-[0_2px_8px_-2px_rgba(79,109,223,0.5)]">
+                <Icon className="h-4 w-4 text-white" />
+              </div>
             </div>
-            <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
-              <ServerIcon className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500 truncate">{label}</p>
+              <p className="text-xl font-bold text-slate-900 tabular-nums leading-tight mt-0.5">{value}</p>
             </div>
           </div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">Active Agents</p>
-              <p className="text-3xl font-bold mt-1 text-gray-900 dark:text-white">{activeAgents}</p>
-            </div>
-            <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-xl">
-              <CheckCircleIcon className="w-8 h-8 text-green-600 dark:text-green-400" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">Critical</p>
-              <p className="text-3xl font-bold mt-1 text-gray-900 dark:text-white">{criticalAgents}</p>
-            </div>
-            <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-xl">
-              <ExclamationTriangleIcon className="w-8 h-8 text-red-600 dark:text-red-400" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">Disconnected</p>
-              <p className="text-3xl font-bold mt-1 text-gray-900 dark:text-white">{disconnectedAgents}</p>
-            </div>
-            <div className="p-3 bg-gray-100 dark:bg-gray-700/50 rounded-xl">
-              <XCircleIcon className="w-8 h-8 text-gray-600 dark:text-gray-400" />
-            </div>
-          </div>
-        </div>
+        ))}
       </div>
 
       {/* Filters */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="bg-gradient-to-br from-white via-white to-blue-50/40 rounded-2xl p-4 shadow-[0_2px_12px_-4px_rgba(15,23,42,0.08)] border border-slate-200/70">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Search */}
           <div className="lg:col-span-2">
             <div className="relative">
-              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
                 placeholder="Search agents by name, IP, or OS..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:text-white"
+                className="w-full pl-9 pr-4 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#4f6ddf]/40 focus:border-[#4f6ddf] text-slate-900 placeholder-slate-400 transition-shadow"
               />
             </div>
           </div>
@@ -1206,7 +1179,7 @@ export default function AgentsPage() {
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-4 py-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:text-white"
+            className="px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#4f6ddf]/40 focus:border-[#4f6ddf] text-slate-700"
           >
             <option value="all">All Status</option>
             <option value="active">Active</option>
@@ -1218,7 +1191,7 @@ export default function AgentsPage() {
           <select
             value={filterCriticality}
             onChange={(e) => setFilterCriticality(e.target.value)}
-            className="px-4 py-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:text-white"
+            className="px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#4f6ddf]/40 focus:border-[#4f6ddf] text-slate-700"
           >
             <option value="all">All Criticality</option>
             <option value="critical">Critical</option>
@@ -1230,85 +1203,87 @@ export default function AgentsPage() {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Security Agents ({filteredAgents.length}{filteredAgents.length !== totalAgents ? ` of ${totalAgents}` : ''})</h3>
-          <div className="text-sm text-gray-500 dark:text-gray-400">
-            Last updated: {isClient ? lastRefresh.toLocaleTimeString() : ''}
+      {/* Agents Table */}
+      <div className="bg-white rounded-2xl shadow-[0_2px_12px_-4px_rgba(15,23,42,0.08)] border border-slate-200/70 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200/80 bg-slate-50/60">
+          <h3 className="text-sm font-semibold text-slate-900">
+            Security Agents <span className="text-slate-500 font-normal">({filteredAgents.length}{filteredAgents.length !== totalAgents ? ` of ${totalAgents}` : ''})</span>
+          </h3>
+          <div className="text-xs text-slate-500">
+            Last updated: <span className="font-medium text-slate-700">{isClient ? lastRefresh.toLocaleTimeString() : ''}</span>
           </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-900/50">
+          <table className="min-w-full">
+            <thead className="bg-gradient-to-r from-[#4f6ddf] to-[#5b78e6]">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-[0.08em]">
                   ID
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-[0.08em]">
                   Name
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-[0.08em]">
                   IP Address
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-[0.08em]">
                   Operating System
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-[0.08em]">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <th className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-[0.08em]">
                   Last Keep Alive
                 </th>
                 {canQuarantineAgents && (
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-[0.08em]">
                     Actions
                   </th>
                 )}
               </tr>
             </thead>
-            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+            <tbody className="divide-y divide-slate-100">
               {filteredAgents.map((agent) => (
                 <tr
                   key={agent.id}
-                  className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                  className="hover:bg-[#4f6ddf]/[0.04] transition-colors cursor-pointer"
                   onClick={() => openAgentModal(agent)}
                 >
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
-                      <span className="text-sm font-medium text-blue-600 dark:text-blue-400">{agent.id}</span>
+                  <td className="px-5 py-3.5 whitespace-nowrap">
+                    <div className="w-8 h-8 bg-[#4f6ddf]/10 rounded-full flex items-center justify-center">
+                      <span className="text-xs font-semibold text-[#4f6ddf]">{agent.id}</span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-5 py-3.5 whitespace-nowrap">
                     <div className="flex items-center">
                       <div className="mr-3">{getOSIcon(agent.operatingSystem)}</div>
                       <div>
-                        <div className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300">
+                        <div className="text-sm font-semibold text-[#4f6ddf] hover:text-[#4360d2]">
                           {agent.name}
                         </div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">{agent.nodename}</div>
+                        <div className="text-xs text-slate-500 mt-0.5">{agent.nodename}</div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-5 py-3.5 whitespace-nowrap">
                     <div className="flex items-center">
-                      <GlobeAltIcon className="w-4 h-4 text-gray-400 mr-2" />
-                      <span className="text-sm font-mono text-gray-900 dark:text-white">{agent.ipAddress}</span>
+                      <GlobeAltIcon className="w-4 h-4 text-slate-400 mr-2" />
+                      <span className="text-sm font-mono text-slate-900">{agent.ipAddress}</span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900 dark:text-white">{agent.operatingSystem}</div>
-                    <div className="text-sm text-gray-500 dark:text-gray-400">Version {agent.version}</div>
+                  <td className="px-5 py-3.5 whitespace-nowrap">
+                    <div className="text-sm text-slate-900">{agent.operatingSystem}</div>
+                    <div className="text-xs text-slate-500 mt-0.5">Version {agent.version}</div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-5 py-3.5 whitespace-nowrap">
                     <div className="flex items-center">
                       {getStatusIcon(agent.status)}
-                      <span className={clsx('ml-2 inline-flex px-2 py-1 text-xs font-semibold rounded-full', getStatusColor(agent.status))}>
-                        {agent.status.charAt(0).toUpperCase() + agent.status.slice(1)}
+                      <span className={clsx('ml-2 inline-flex px-2.5 py-0.5 text-xs font-medium rounded-full capitalize', getStatusColor(agent.status))}>
+                        {agent.status}
                       </span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                  <td className="px-5 py-3.5 whitespace-nowrap text-xs text-slate-500">
                     {agent.last_keepalive && agent.last_keepalive !== 'Unknown'
                       ? new Date(agent.last_keepalive).toLocaleString()
                       : 'Unknown'}

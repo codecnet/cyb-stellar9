@@ -3,6 +3,7 @@ import { axiosInstance } from '../services/wazuhExtended.service.js';
 import Organisation from '../models/organisation.model.js';
 import { EncryptionUtils } from '../utils/security.util.js';
 
+import { classifyAsset } from '../utils/assetClassification.js';
 // Get all assets for an organization
 export const getAssets = async (req, res) => {
   try {
@@ -327,7 +328,7 @@ export const syncAgentsToAssets = async (req, res) => {
           // Agent information
           agent_name: agent.name || null,
           agent_id: agent.id || null,
-          agent_version: agent.version || null,
+          agent_version: agent.version ? String(agent.version).replace(/Wazuh/gi, 'CYB') : null,
           agent_host_ip: agent.ip || null,
 
           // Wazuh cluster information
@@ -377,7 +378,7 @@ export const syncAgentsToAssets = async (req, res) => {
 
         const assetData = {
           organisation_id: organisation_id,
-          asset_tag: `WZH-${agent.id}`,
+          asset_tag: `CYB-${agent.id}`,
           asset_name: agent.name || `Agent ${agent.id}`,
           wazuh_agent_id: agent.id,
           wazuh_agent_name: agent.name,
@@ -415,6 +416,9 @@ export const syncAgentsToAssets = async (req, res) => {
         } else {
           // Create new asset
           assetData.created_by = req.user?._id;
+          // RBI-aligned classification - applied on CREATE only so that any
+          // manual classification made later in the portal is preserved.
+          Object.assign(assetData, classifyAsset(assetData));
           const newAsset = new AssetRegister(assetData);
           await newAsset.save();
           created++;

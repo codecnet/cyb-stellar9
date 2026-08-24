@@ -18,6 +18,8 @@ const getDashboardMetrics = asyncHandler(async (req, res) => {
     const { host: WAZUH_HOST, username: WAZUH_USER, password: WAZUH_PASS } = wazuhCreds;
     const { host: INDEXER_HOST, username: INDEXER_USER, password: INDEXER_PASS } = indexerCreds;
 
+    const minAlertLevel = parseInt(process.env.WAZUH_MIN_ALERT_LEVEL) || 8;
+
     const token = await getWazuhToken(WAZUH_HOST, WAZUH_USER, WAZUH_PASS);
 
     const agentSummaryResponse = await axiosInstance.get(
@@ -43,6 +45,13 @@ const getDashboardMetrics = asyncHandler(async (req, res) => {
                 },
               },
             },
+            {
+              range: {
+                "rule.level": {
+                  gte: minAlertLevel,
+                },
+              },
+            },
           ],
         },
       },
@@ -51,9 +60,9 @@ const getDashboardMetrics = asyncHandler(async (req, res) => {
           range: {
             field: "rule.level",
             ranges: [
-              { key: "Minor", from: 8, to: 11 },
-              { key: "Major", from: 11, to: 14 },
-              { key: "Critical", from: 14 },
+              { key: "Minor", to: 10 },
+              { key: "Major", from: 10, to: 13 },
+              { key: "Critical", from: 13 },
             ],
           },
           aggs: {
@@ -107,14 +116,21 @@ const getDashboardMetrics = asyncHandler(async (req, res) => {
 
     const totalAlertQuery = {
       size: 0,
+      query: {
+        range: {
+          "rule.level": {
+            gte: minAlertLevel,
+          },
+        },
+      },
       aggs: {
         severity: {
           range: {
             field: "rule.level",
             ranges: [
-              { key: "Minor", from: 8, to: 11 },
-              { key: "Major", from: 11, to: 14 },
-              { key: "Critical", from: 14 },
+              { key: "Minor", to: 10 },
+              { key: "Major", from: 10, to: 13 },
+              { key: "Critical", from: 13 },
             ],
           },
         },
@@ -157,18 +173,42 @@ const getDashboardMetrics = asyncHandler(async (req, res) => {
     const wazuhHealthData = wazuhHealthResponse.data;
 
     const now = new Date();
-    const timeFilter = new Date(
-      now.getTime() - 24 * 60 * 60 * 1000
-    ).toISOString();
+    // Window for the alert-severity metrics, driven by the dashboard time-range
+    // selector via ?hours=. 0 means all time (no timestamp filter). Anything
+    // else falls back to 24 so existing callers keep their previous behaviour.
+    const ALLOWED_HOURS = [0, 1, 6, 24, 168, 720, 2160];
+    const requestedHours = parseInt(req.query.hours, 10);
+    const windowHours = ALLOWED_HOURS.includes(requestedHours) ? requestedHours : 24;
+    const timeFilter =
+      windowHours > 0
+        ? new Date(now.getTime() - windowHours * 60 * 60 * 1000).toISOString()
+        : null;
 
     const last24hrQuery = {
       size: 0,
       query: {
-        range: {
-          timestamp: {
-            gte: timeFilter,
-            lte: now.toISOString(),
-          },
+        bool: {
+          must: [
+            ...(timeFilter
+              ? [
+                  {
+                    range: {
+                      timestamp: {
+                        gte: timeFilter,
+                        lte: now.toISOString(),
+                      },
+                    },
+                  },
+                ]
+              : []),
+            {
+              range: {
+                "rule.level": {
+                  gte: minAlertLevel,
+                },
+              },
+            },
+          ],
         },
       },
       aggs: {
@@ -176,9 +216,9 @@ const getDashboardMetrics = asyncHandler(async (req, res) => {
           range: {
             field: "rule.level",
             ranges: [
-              { key: "Minor", from: 8, to: 11 },
-              { key: "Major", from: 11, to: 14 },
-              { key: "Critical", from: 14 },
+              { key: "Minor", to: 10 },
+              { key: "Major", from: 10, to: 13 },
+              { key: "Critical", from: 13 },
             ],
           },
         },
@@ -220,6 +260,8 @@ const getDashboardMetrics = asyncHandler(async (req, res) => {
 
     const responseData = {
       total_alerts: totalAlerts,
+      window_hours: windowHours,
+      alerts_in_window: alertsLast24hr,
       alerts_last_24hr: alertsLast24hr,
       critical_alerts: criticalAlertsLast24hr,
       major_alerts: majorAlertsLast24hr,

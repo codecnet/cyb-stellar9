@@ -582,255 +582,254 @@ export default function EventsByAgentPage() {
   }, [data])
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <ChartBarSquareIcon className="h-7 w-7 text-blue-500" />
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2.5">
+            <ChartBarSquareIcon className="h-7 w-7 text-[#4f6ddf]" />
             Event Ingested
           </h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          <p className="mt-1.5 text-sm text-slate-600">
             View events (alerts) distribution across all agents/machines
           </p>
         </div>
         <button
           onClick={fetchData}
           disabled={loading}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          className={clsx(
+            'inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200',
+            'bg-[#4f6ddf] hover:bg-[#4360d2] text-white',
+            'shadow-[0_4px_12px_-2px_rgba(79,109,223,0.4)] hover:shadow-[0_6px_16px_-2px_rgba(79,109,223,0.5)] hover:-translate-y-0.5',
+            'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0'
+          )}
         >
-          <ArrowPathIcon className={clsx('h-5 w-5', loading && 'animate-spin')} />
+          <ArrowPathIcon className={clsx('h-4 w-4', loading && 'animate-spin')} />
           Refresh
         </button>
       </div>
 
       {/* Summary Cards */}
       {data && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                <ComputerDesktopIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { label: 'Total Agents', value: data.total_agents, Icon: ComputerDesktopIcon },
+            { label: 'Total Events', value: data.total_events, Icon: ExclamationTriangleIcon },
+          ].map(({ label, value, Icon }) => (
+            <div
+              key={label}
+              className="group flex flex-col gap-2 rounded-xl bg-gradient-to-br from-[#4f6ddf]/8 via-white to-[#4f6ddf]/12 border border-slate-200/60 p-3 shadow-[0_4px_16px_-6px_rgba(79,109,223,0.15)] transition-all duration-200 hover:border-[#4f6ddf]/40 hover:shadow-[0_10px_30px_-8px_rgba(79,109,223,0.28)] hover:-translate-y-0.5"
+            >
+              <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-[#4f6ddf] shadow-[0_2px_8px_-2px_rgba(79,109,223,0.5)]">
+                <Icon className="h-4 w-4 text-white" />
               </div>
               <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Total Agents</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {formatNumber(data.total_agents)}
+                <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500 truncate">{label}</p>
+                <p className="text-xl font-bold text-slate-900 tabular-nums leading-tight mt-0.5">
+                  {formatNumber(value)}
                 </p>
               </div>
             </div>
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-5 shadow-sm border border-gray-200 dark:border-gray-700">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
-                <ExclamationTriangleIcon className="h-6 w-6 text-orange-600 dark:text-orange-400" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Total Events</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {formatNumber(data.total_events)}
-                </p>
-              </div>
-            </div>
-          </div>
+          ))}
         </div>
       )}
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        {/* Search */}
-        <div className="relative flex-1 flex items-center bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 px-3 py-3">
-          <MagnifyingGlassIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
-          <input
-            type="text"
-            placeholder="Search by agent name, ID, or IP..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="flex-1 ml-2 bg-transparent text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none"
-          />
-        </div>
-
-        {/* Time Range Filter */}
-        <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-3">
-          <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
-            <ClockIcon className="h-5 w-5" />
-            <span className="text-sm font-medium">Time Range</span>
+      <div className="bg-gradient-to-br from-white via-white to-blue-50/40 rounded-2xl p-4 shadow-[0_2px_12px_-4px_rgba(15,23,42,0.08)] border border-slate-200/70">
+        <div className="flex flex-col lg:flex-row gap-3">
+          {/* Search */}
+          <div className="relative flex-1">
+            <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search by agent name, ID, or IP..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#4f6ddf]/40 focus:border-[#4f6ddf] text-slate-900 placeholder-slate-400 transition-shadow"
+            />
           </div>
 
-          {/* Toggle between Relative and Absolute */}
-          <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 p-1">
-            <button
-              onClick={() => setTimeRangeType('relative')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                timeRangeType === 'relative'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              Relative
-            </button>
-            <button
-              onClick={() => setTimeRangeType('absolute')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                timeRangeType === 'absolute'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              Absolute
-            </button>
+          {/* Time Range Filter */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex items-center gap-1.5 text-slate-500">
+              <ClockIcon className="h-4 w-4" />
+              <span className="text-xs font-semibold uppercase tracking-wider">Time</span>
+            </div>
+
+            {/* Toggle */}
+            <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
+              <button
+                onClick={() => setTimeRangeType('relative')}
+                className={clsx(
+                  'px-3 py-1.5 rounded-md text-xs font-semibold transition-colors',
+                  timeRangeType === 'relative'
+                    ? 'bg-[#4f6ddf] text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                )}
+              >
+                Relative
+              </button>
+              <button
+                onClick={() => setTimeRangeType('absolute')}
+                className={clsx(
+                  'px-3 py-1.5 rounded-md text-xs font-semibold transition-colors',
+                  timeRangeType === 'absolute'
+                    ? 'bg-[#4f6ddf] text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                )}
+              >
+                Absolute
+              </button>
+            </div>
+
+            {timeRangeType === 'relative' && (
+              <select
+                value={relativeHours}
+                onChange={(e) => setRelativeHours(parseInt(e.target.value))}
+                className="px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#4f6ddf]/40 focus:border-[#4f6ddf] text-slate-700"
+              >
+                <option value={0}>All Time</option>
+                <option value={1}>Last Hour</option>
+                <option value={6}>Last 6 Hours</option>
+                <option value={24}>Last 24 Hours</option>
+                <option value={168}>Last 7 Days</option>
+                <option value={720}>Last 30 Days</option>
+                <option value={2160}>Last 90 Days</option>
+              </select>
+            )}
+
+            {timeRangeType === 'absolute' && (
+              <>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-medium text-slate-600">From</label>
+                  <input
+                    type="datetime-local"
+                    value={fromDate}
+                    onChange={(e) => setFromDate(e.target.value)}
+                    className="px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#4f6ddf]/40 focus:border-[#4f6ddf] text-slate-700"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-medium text-slate-600">To</label>
+                  <input
+                    type="datetime-local"
+                    value={toDate}
+                    onChange={(e) => setToDate(e.target.value)}
+                    className="px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#4f6ddf]/40 focus:border-[#4f6ddf] text-slate-700"
+                  />
+                </div>
+              </>
+            )}
           </div>
-
-          {/* Relative Time Selector */}
-          {timeRangeType === 'relative' && (
-            <select
-              value={relativeHours}
-              onChange={(e) => setRelativeHours(parseInt(e.target.value))}
-              className="px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
-            >
-              <option value={0}>All Time</option>
-              <option value={1}>Last Hour</option>
-              <option value={6}>Last 6 Hours</option>
-              <option value={24}>Last 24 Hours</option>
-              <option value={168}>Last 7 Days</option>
-              <option value={720}>Last 30 Days</option>
-              <option value={2160}>Last 90 Days</option>
-            </select>
-          )}
-
-          {/* Absolute Time Range Selector */}
-          {timeRangeType === 'absolute' && (
-            <>
-              <div className="flex items-center space-x-2">
-                <label className="text-sm text-gray-600 dark:text-gray-400">From:</label>
-                <input
-                  type="datetime-local"
-                  value={fromDate}
-                  onChange={(e) => setFromDate(e.target.value)}
-                  className="px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div className="flex items-center space-x-2">
-                <label className="text-sm text-gray-600 dark:text-gray-400">To:</label>
-                <input
-                  type="datetime-local"
-                  value={toDate}
-                  onChange={(e) => setToDate(e.target.value)}
-                  className="px-3 py-1.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </>
-          )}
         </div>
       </div>
 
       {/* Error State */}
       {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-          <p className="text-red-600 dark:text-red-400">{error}</p>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+          <p className="text-red-700 text-sm font-medium">{error}</p>
         </div>
       )}
 
       {/* Loading State */}
       {loading && (
-        <div className="flex items-center justify-center py-12">
-          <ArrowPathIcon className="h-8 w-8 text-blue-500 animate-spin" />
-          <span className="ml-2 text-gray-600 dark:text-gray-400">Loading events data...</span>
+        <div className="flex items-center justify-center py-12 bg-white rounded-xl border border-slate-200/70">
+          <ArrowPathIcon className="h-6 w-6 text-[#4f6ddf] animate-spin" />
+          <span className="ml-2 text-sm text-slate-600">Loading events data...</span>
         </div>
       )}
 
       {/* Table */}
       {!loading && !error && data && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-[0_2px_12px_-4px_rgba(15,23,42,0.08)] border border-slate-200/70 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-900/50">
+            <table className="min-w-full">
+              <thead className="bg-gradient-to-r from-[#4f6ddf] to-[#5b78e6]">
                 <tr>
                   <th
                     onClick={() => handleSort('agent_id')}
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                    className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-[0.08em] cursor-pointer hover:bg-white/10 transition-colors"
                   >
                     Agent ID <SortIcon field="agent_id" />
                   </th>
                   <th
                     onClick={() => handleSort('agent_name')}
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                    className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-[0.08em] cursor-pointer hover:bg-white/10 transition-colors"
                   >
                     Agent Name <SortIcon field="agent_name" />
                   </th>
                   <th
                     onClick={() => handleSort('agent_ip')}
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                    className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-[0.08em] cursor-pointer hover:bg-white/10 transition-colors"
                   >
                     IP Address <SortIcon field="agent_ip" />
                   </th>
                   <th
                     onClick={() => handleSort('event_count')}
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                    className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-[0.08em] cursor-pointer hover:bg-white/10 transition-colors"
                   >
                     Event Count <SortIcon field="event_count" />
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-[0.08em]">
                     Trend
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-[0.08em]">
                     Distribution
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody className="divide-y divide-slate-100">
                 {pagedAgents.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                    <td colSpan={6} className="px-5 py-12 text-center text-sm text-slate-500">
                       {searchTerm ? 'No agents match your search' : 'No agents found'}
                     </td>
                   </tr>
                 ) : (
                   pagedAgents.map((agent) => (
-                    <tr key={agent.agent_id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
+                    <tr key={agent.agent_id} className="hover:bg-[#4f6ddf]/[0.04] transition-colors">
+                      <td className="px-5 py-3.5 whitespace-nowrap">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-[#4f6ddf]/10 text-[#4f6ddf]">
                           {agent.agent_id}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-5 py-3.5 whitespace-nowrap">
                         <div className="flex items-center gap-2">
-                          <ComputerDesktopIcon className="h-5 w-5 text-gray-400" />
-                          <span className="text-sm font-medium text-gray-900 dark:text-white">
+                          <ComputerDesktopIcon className="h-4 w-4 text-slate-400" />
+                          <span className="text-sm font-semibold text-slate-900">
                             {agent.agent_name || 'Unknown'}
                           </span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-gray-600 dark:text-gray-300 font-mono">
+                      <td className="px-5 py-3.5 whitespace-nowrap">
+                        <span className="text-sm text-slate-700 font-mono">
                           {agent.agent_ip || 'N/A'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-5 py-3.5 whitespace-nowrap">
                         <span className={clsx(
-                          'text-sm font-semibold',
+                          'text-sm font-bold tabular-nums',
                           getEventCountColor(agent.event_count, maxEventCount)
                         )}>
                           {formatNumber(agent.event_count)}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-5 py-3.5 whitespace-nowrap">
                         <button
                           onClick={() => openAgentModal(agent)}
-                          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+                          className="p-1 rounded hover:bg-[#4f6ddf]/10 transition-colors cursor-pointer"
                           title="Click to view detailed chart"
                         >
                           <SparklineChart data={agent.trend || []} />
                         </button>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="w-32 bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                      <td className="px-5 py-3.5 whitespace-nowrap">
+                        <div className="w-32 bg-slate-100 rounded-full h-2 overflow-hidden">
                           <div
                             className={clsx(
-                              'h-2.5 rounded-full transition-all duration-300',
+                              'h-2 rounded-full transition-all duration-300',
                               agent.event_count / maxEventCount > 0.7 ? 'bg-red-500' :
-                              agent.event_count / maxEventCount > 0.4 ? 'bg-yellow-500' : 'bg-green-500'
+                              agent.event_count / maxEventCount > 0.4 ? 'bg-yellow-500' : 'bg-emerald-500'
                             )}
                             style={{ width: `${(agent.event_count / maxEventCount) * 100}%` }}
                           />
@@ -853,14 +852,14 @@ export default function EventsByAgentPage() {
                 pages.push('...')
               }
             }
-            const btnBase = 'min-w-[36px] h-9 px-2 text-sm font-medium rounded-lg border transition-colors'
-            const btnActive = 'bg-blue-600 border-blue-600 text-white'
-            const btnIdle = 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700'
+            const btnBase = 'min-w-[34px] h-8 px-2 text-xs font-semibold rounded-lg border transition-all duration-150'
+            const btnActive = 'bg-[#4f6ddf] border-[#4f6ddf] text-white shadow-[0_2px_6px_-1px_rgba(79,109,223,0.4)]'
+            const btnIdle = 'border-slate-200 text-slate-600 bg-white hover:border-[#4f6ddf]/40 hover:text-[#4f6ddf]'
             const btnDisabled = 'opacity-40 cursor-not-allowed'
             return (
-              <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Showing {filteredAndSortedAgents.length === 0 ? 0 : (tablePage - 1) * TABLE_PAGE_SIZE + 1}–{Math.min(tablePage * TABLE_PAGE_SIZE, filteredAndSortedAgents.length)} of {filteredAndSortedAgents.length} agents
+              <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200/80 bg-slate-50/60">
+                <p className="text-xs text-slate-500">
+                  Showing <span className="font-semibold text-slate-700">{filteredAndSortedAgents.length === 0 ? 0 : (tablePage - 1) * TABLE_PAGE_SIZE + 1}–{Math.min(tablePage * TABLE_PAGE_SIZE, filteredAndSortedAgents.length)}</span> of <span className="font-semibold text-slate-700">{filteredAndSortedAgents.length}</span> agents
                 </p>
                 <div className="flex items-center gap-1">
                   <button
@@ -872,7 +871,7 @@ export default function EventsByAgentPage() {
                   </button>
                   {pages.map((p, i) =>
                     p === '...' ? (
-                      <span key={`ellipsis-${i}`} className="min-w-[36px] h-9 flex items-center justify-center text-sm text-gray-400 dark:text-gray-500">…</span>
+                      <span key={`ellipsis-${i}`} className="min-w-[34px] h-8 flex items-center justify-center text-xs text-slate-400">…</span>
                     ) : (
                       <button
                         key={p}

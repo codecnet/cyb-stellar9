@@ -671,7 +671,7 @@ export default function IocListPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">IOC List</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            Manage Wazuh CDB lists for indicator-of-compromise lookups
+            Manage CYB CDB lists for indicator-of-compromise lookups
           </p>
         </div>
         <div className="flex items-center gap-2">

@@ -18,6 +18,8 @@ import { clsx } from 'clsx';
 import { Role, Permission } from '../types';
 import Cookies from 'js-cookie';
 
+const BASE_URL = process.env.NEXT_PUBLIC_RBAC_BASE_IP || 'http://localhost:5000/api';
+
 import RoleForm from '../modal/RoleForm';
 import PermissionForm from '../modal/PermissionForm';
 
@@ -61,7 +63,7 @@ export default function AccessControl({
     setSyncResult(null);
     try {
       const token = Cookies.get('auth_token');
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/permissions/sync-defaults`, {
+      const response = await fetch(`${BASE_URL}/permissions/sync-defaults`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
       });
@@ -70,7 +72,7 @@ export default function AccessControl({
       setSyncResult({ created: result.created || [], skipped: result.skipped || [] });
       // Refresh permissions list if new ones were created
       if ((result.created || []).length > 0) {
-        const permResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/permissions/all`, {
+        const permResponse = await fetch(`${BASE_URL}/permissions/all`, {
           headers: { 'Authorization': `Bearer ${token}` },
         });
         const permData = await permResponse.json();

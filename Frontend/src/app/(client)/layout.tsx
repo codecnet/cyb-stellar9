@@ -24,7 +24,8 @@ export default function ClientLayout({
             </main>
             <Footer />
           </div>
-          <AIChatbot />
+          {/* AI Security Assistant hidden */}
+          {/* <AIChatbot /> */}
         </div>
       </ClientModeGuard>
     </AuthGuard>

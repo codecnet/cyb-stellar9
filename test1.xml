@@ -1,7 +1,7 @@
 <group name="custom_test,">
 
   <!-- ══════════════════════════════════════════════════════════════
-       CodecNet — Sample Custom Rules for Import Testing
+       Stellar9 — Sample Custom Rules for Import Testing
        Rule IDs: 100100–100110
        Docs: https://documentation.wazuh.com/current/user-manual/ruleset/custom-rules.html
        ══════════════════════════════════════════════════════════════ -->

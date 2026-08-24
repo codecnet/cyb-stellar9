@@ -545,53 +545,79 @@ export default function AssetRegisterPage() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-5 p-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-wrap justify-between items-start gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Asset Register Management</h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Asset Register Management</h1>
+          <p className="mt-1.5 text-sm text-slate-600">
             Manage and track all organizational assets
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-2.5">
           <button
             onClick={() => syncAgents(true)}
             disabled={syncing}
             className={clsx(
-              'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all',
-              'bg-blue-600 hover:bg-blue-700 text-white shadow-lg',
-              'disabled:opacity-50 disabled:cursor-not-allowed'
+              'inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200',
+              'bg-[#4f6ddf] hover:bg-[#4360d2] text-white',
+              'shadow-[0_4px_12px_-2px_rgba(79,109,223,0.4)] hover:shadow-[0_6px_16px_-2px_rgba(79,109,223,0.5)] hover:-translate-y-0.5',
+              'disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0'
             )}
           >
-            <ArrowPathIcon className={clsx('w-5 h-5', syncing && 'animate-spin')} />
+            <ArrowPathIcon className={clsx('w-4 h-4', syncing && 'animate-spin')} />
             {syncing ? 'Syncing...' : 'Sync'}
           </button>
           {hasPermission('assets', 'create') && (
             <button
               onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all bg-green-600 hover:bg-green-700 text-white shadow-lg"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 bg-white border border-slate-200 text-slate-700 hover:border-[#4f6ddf] hover:text-[#4f6ddf] hover:shadow-md hover:-translate-y-0.5 shadow-[0_2px_8px_-2px_rgba(15,23,42,0.06)]"
             >
-              <PlusIcon className="w-5 h-5" />
+              <PlusIcon className="w-4 h-4" />
               Add Asset Manually
             </button>
           )}
         </div>
       </div>
 
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: 'Total Assets', value: assets.length, Icon: ServerIcon },
+          { label: 'Active', value: assets.filter(a => a.wazuh_agent_status === 'active').length, Icon: CheckCircleIcon },
+          { label: 'Critical', value: assets.filter(a => a.asset_criticality === 'critical').length, Icon: ExclamationTriangleIcon },
+          { label: 'Disconnected', value: assets.filter(a => a.wazuh_agent_status === 'disconnected').length, Icon: XCircleIcon },
+        ].map(({ label, value, Icon }) => (
+          <div
+            key={label}
+            className="group flex flex-col gap-2 rounded-xl bg-gradient-to-br from-[#4f6ddf]/8 via-white to-[#4f6ddf]/12 border border-slate-200/60 p-3 shadow-[0_4px_16px_-6px_rgba(79,109,223,0.15)] transition-all duration-200 hover:border-[#4f6ddf]/40 hover:shadow-[0_10px_30px_-8px_rgba(79,109,223,0.28)] hover:-translate-y-0.5"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center justify-center h-8 w-8 rounded-lg bg-[#4f6ddf] shadow-[0_2px_8px_-2px_rgba(79,109,223,0.5)]">
+                <Icon className="h-4 w-4 text-white" />
+              </div>
+            </div>
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500 truncate">{label}</p>
+              <p className="text-xl font-bold text-slate-900 tabular-nums leading-tight mt-0.5">{value}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
       {/* Filters */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="bg-gradient-to-br from-white via-white to-blue-50/40 rounded-2xl p-4 shadow-[0_2px_12px_-4px_rgba(15,23,42,0.08)] border border-slate-200/70">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
           {/* Search */}
           <div className="lg:col-span-2">
             <div className="relative">
-              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
                 placeholder="Search assets..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:text-white"
+                className="w-full pl-9 pr-4 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#4f6ddf]/40 focus:border-[#4f6ddf] text-slate-900 placeholder-slate-400 transition-shadow"
               />
             </div>
           </div>
@@ -600,7 +626,7 @@ export default function AssetRegisterPage() {
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
-            className="px-4 py-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:text-white"
+            className="px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#4f6ddf]/40 focus:border-[#4f6ddf] text-slate-700"
           >
             <option value="all">All Types</option>
             <option value="endpoint">Endpoint</option>
@@ -623,7 +649,7 @@ export default function AssetRegisterPage() {
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-4 py-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:text-white"
+            className="px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#4f6ddf]/40 focus:border-[#4f6ddf] text-slate-700"
           >
             <option value="all">All Status</option>
             <option value="active">Active</option>
@@ -636,7 +662,7 @@ export default function AssetRegisterPage() {
           <select
             value={filterCriticality}
             onChange={(e) => setFilterCriticality(e.target.value)}
-            className="px-4 py-2 bbg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:text-white"
+            className="px-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-[#4f6ddf]/40 focus:border-[#4f6ddf] text-slate-700"
           >
             <option value="all">All Criticality</option>
             <option value="critical">Critical</option>
@@ -647,106 +673,52 @@ export default function AssetRegisterPage() {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">Total Assets</p>
-              <p className="text-3xl font-bold mt-1 text-gray-900 dark:text-white">{assets.length}</p>
-            </div>
-            <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
-              <ServerIcon className="w-8 h-8 text-blue-600 dark:text-blue-400" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">Active</p>
-              <p className="text-3xl font-bold mt-1 text-gray-900 dark:text-white">
-                {assets.filter(a => a.wazuh_agent_status === 'active').length}
-              </p>
-            </div>
-            <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-xl">
-              <CheckCircleIcon className="w-8 h-8 text-green-600 dark:text-green-400" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">Critical</p>
-              <p className="text-3xl font-bold mt-1 text-gray-900 dark:text-white">
-                {assets.filter(a => a.asset_criticality === 'critical').length}
-              </p>
-            </div>
-            <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-xl">
-              <ExclamationTriangleIcon className="w-8 h-8 text-red-600 dark:text-red-400" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-lg border border-gray-200 dark:border-gray-700">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-gray-600 dark:text-gray-400 text-sm font-medium">Disconnected</p>
-              <p className="text-3xl font-bold mt-1 text-gray-900 dark:text-white">
-                {assets.filter(a => a.wazuh_agent_status === 'disconnected').length}
-              </p>
-            </div>
-            <div className="p-3 bg-orange-100 dark:bg-orange-900/30 rounded-xl">
-              <XCircleIcon className="w-8 h-8 text-orange-600 dark:text-orange-400" />
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Assets Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-[0_2px_12px_-4px_rgba(15,23,42,0.08)] border border-slate-200/70 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
+            <thead className="bg-gradient-to-r from-[#4f6ddf] to-[#5b78e6]">
               <tr>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-[0.08em]">
                   Asset
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-[0.08em]">
                   Type
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-[0.08em]">
                   IP Address
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-[0.08em]">
                   Operating System
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-[0.08em]">
                   Status
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-[0.08em]">
                   Criticality
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                <th className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-[0.08em]">
                   Environment
                 </th>
                 {showActionsColumn && (
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-white uppercase tracking-[0.08em]">
                     Actions
                   </th>
                 )}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+            <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
                   <td colSpan={8} className="px-6 py-12 text-center">
                     <div className="flex justify-center items-center">
-                      <ArrowPathIcon className="w-8 h-8 animate-spin text-blue-500" />
+                      <ArrowPathIcon className="w-8 h-8 animate-spin text-[#4f6ddf]" />
                     </div>
                   </td>
                 </tr>
               ) : filteredAssets.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
                     No assets found
                   </td>
                 </tr>
@@ -755,65 +727,65 @@ export default function AssetRegisterPage() {
                   <tr
                     key={asset._id}
                     onClick={() => openDetailModal(asset)}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
+                    className="hover:bg-[#4f6ddf]/[0.04] transition-colors cursor-pointer"
                   >
-                    <td className="px-6 py-4">
+                    <td className="px-5 py-3.5">
                       <div>
-                        <p className="font-semibold text-gray-900 dark:text-white">
+                        <p className="font-semibold text-slate-900 text-sm">
                           {asset.asset_name}
                         </p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                        <p className="text-xs text-slate-500 mt-0.5">
                           {asset.asset_tag}
                         </p>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-gray-700 dark:text-gray-300 capitalize">
+                    <td className="px-5 py-3.5">
+                      <span className="text-sm text-slate-700 capitalize">
                         {asset.asset_type.replace(/_/g, ' ')}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-gray-700 dark:text-gray-300">
+                    <td className="px-5 py-3.5">
+                      <span className="text-sm text-slate-700 font-mono">
                         {asset.ip_address || 'N/A'}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-gray-700 dark:text-gray-300">
+                    <td className="px-5 py-3.5">
+                      <span className="text-sm text-slate-700">
                         {asset.operating_system || 'N/A'}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-5 py-3.5">
                       <span className={clsx(
-                        'inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium',
+                        'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium capitalize',
                         getStatusColor(asset.wazuh_agent_status || asset.status)
                       )}>
                         {getStatusIcon(asset.wazuh_agent_status || asset.status)}
                         {asset.wazuh_agent_status || asset.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-5 py-3.5">
                       <span className={clsx(
-                        'inline-flex px-3 py-1 rounded-full text-xs font-medium',
+                        'inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium capitalize',
                         getCriticalityColor(asset.asset_criticality)
                       )}>
                         {asset.asset_criticality}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
-                      <span className="text-sm text-gray-700 dark:text-gray-300 capitalize">
+                    <td className="px-5 py-3.5">
+                      <span className="text-sm text-slate-700 capitalize">
                         {asset.environment.replace(/_/g, ' ')}
                       </span>
                     </td>
                     {showActionsColumn && (
-                      <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-2">
+                      <td className="px-5 py-3.5" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-1">
                           {canUpdate && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation()
                                 openEditModal(asset)
                               }}
-                              className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                              className="p-1.5 text-[#4f6ddf] hover:bg-[#4f6ddf]/10 rounded-lg transition-colors"
                               title="Edit Asset"
                             >
                               <PencilIcon className="w-4 h-4" />
@@ -825,7 +797,7 @@ export default function AssetRegisterPage() {
                                 e.stopPropagation()
                                 handleDeleteAsset(asset._id)
                               }}
-                              className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                              className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
                               title="Delete Asset"
                             >
                               <TrashIcon className="w-4 h-4" />
@@ -1455,6 +1427,14 @@ export default function AssetRegisterPage() {
                   return rows;
                 };
 
+                // Display-only vendor rebrand: the DB and API keep their wazuh_* keys
+                // (see Backend/middlewares/vendorName.middleware.js) - only the label shown
+                // in the Field Name column is rewritten to CYB.
+                const toDisplayKey = (k: string) =>
+                  k.split('.')
+                   .map(p => (p.startsWith('wazuh_') ? 'cyb_' + p.slice(6) : p))
+                   .join('.');
+
                 const assetRows = flattenObject(selectedAsset);
 
                 return (
@@ -1484,7 +1464,7 @@ export default function AssetRegisterPage() {
                               className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                             >
                               <td className="py-3 px-4 text-sm font-semibold text-gray-900 dark:text-white font-mono">
-                                {row.key}
+                                {toDisplayKey(row.key)}
                               </td>
                               <td className="py-3 px-4 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">
                                 {row.value}

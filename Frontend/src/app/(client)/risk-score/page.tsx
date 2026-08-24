@@ -26,14 +26,12 @@ interface Factor {
 // ── Risk score calculation ────────────────────────────────────────────────────
 
 function computeRiskScore(m: Metrics): { score: number; factors: Factor[] } {
-  const compliance = parseFloat(m.compliance_score) || 0;
 
-  const critPts = Math.min((m.critical_alerts / 5) * 35, 35);
-  const majPts  = Math.min((m.major_alerts / 20) * 25, 25);
-  const minPts  = Math.min((m.minor_alerts / 100) * 10, 10);
-  const compPts = ((100 - compliance) / 100) * 30;
+  const critPts = Math.min((m.critical_alerts / 5) * 50, 50);
+  const majPts  = Math.min((m.major_alerts / 20) * 36, 36);
+  const minPts  = Math.min((m.minor_alerts / 100) * 14, 14);
 
-  const total = Math.min(Math.round(critPts + majPts + minPts + compPts), 100);
+  const total = Math.min(Math.round(critPts + majPts + minPts), 100);
 
   const sev = (v: number, max: number): Factor['severity'] => {
     const p = v / max;
@@ -46,18 +44,15 @@ function computeRiskScore(m: Metrics): { score: number; factors: Factor[] } {
   return {
     score: total,
     factors: [
-      { label: 'Critical Alerts', value: Math.round(critPts), maxValue: 35,
+      { label: 'Critical Alerts', value: Math.round(critPts), maxValue: 50,
         description: `${m.critical_alerts} critical alert${m.critical_alerts !== 1 ? 's' : ''} in last 24 h`,
-        severity: sev(critPts, 35) },
-      { label: 'Major Alerts',    value: Math.round(majPts),  maxValue: 25,
+        severity: sev(critPts, 50) },
+      { label: 'Major Alerts',    value: Math.round(majPts),  maxValue: 36,
         description: `${m.major_alerts} major alert${m.major_alerts !== 1 ? 's' : ''} in last 24 h`,
-        severity: sev(majPts, 25) },
-      { label: 'Minor Alerts',    value: Math.round(minPts),  maxValue: 10,
+        severity: sev(majPts, 36) },
+      { label: 'Minor Alerts',    value: Math.round(minPts),  maxValue: 14,
         description: `${m.minor_alerts} minor alert${m.minor_alerts !== 1 ? 's' : ''} in last 24 h`,
-        severity: sev(minPts, 10) },
-      { label: 'Compliance Gap',  value: Math.round(compPts), maxValue: 30,
-        description: `Compliance score: ${compliance}%`,
-        severity: sev(compPts, 30) },
+        severity: sev(minPts, 14) },
     ],
   };
 }
@@ -329,11 +324,10 @@ export default function RiskScorePage() {
           <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
             Security Metrics
           </p>
-          <div className="grid grid-cols-3 divide-x divide-gray-100 dark:divide-gray-800">
+          <div className="grid grid-cols-2 divide-x divide-gray-100 dark:divide-gray-800">
             {[
               { value: String(metrics.alerts_last_24hr ?? 0), label: 'Alerts (24 h)' },
               { value: String(metrics.active_agents),         label: 'Active Agents'  },
-              { value: metrics.compliance_score,              label: 'Compliance'      },
             ].map(item => (
               <div key={item.label} className="px-6 first:pl-0 last:pr-0">
                 <div className="text-2xl font-bold text-gray-900 dark:text-white">{item.value}</div>

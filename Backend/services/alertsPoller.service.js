@@ -57,7 +57,7 @@ async function fetchCurrentAlertCount(indexerCreds) {
         bool: {
           filter: [
             { range: { '@timestamp': { gte: 'now-24h', lt: 'now' } } },
-            { range: { 'rule.level': { gte: 8 } } }
+            { range: { 'rule.level': { gte: parseInt(process.env.WAZUH_MIN_ALERT_LEVEL) || 8 } } }
           ]
         }
       }

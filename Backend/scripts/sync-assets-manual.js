@@ -5,6 +5,7 @@ import AssetRegister from '../models/assetRegisterManagement.model.js';
 import Organisation from '../models/organisation.model.js';
 import { EncryptionUtils } from '../utils/security.util.js';
 
+import { classifyAsset } from '../utils/assetClassification.js';
 const axiosInstance = axios.create({
   httpsAgent: new https.Agent({
     rejectUnauthorized: false
@@ -109,7 +110,7 @@ async function syncAssets() {
         const otherAttributes = {
           agent_name: agent.name || null,
           agent_id: agent.id || null,
-          agent_version: agent.version || null,
+          agent_version: agent.version ? String(agent.version).replace(/Wazuh/gi, 'CYB') : null,
           agent_host_ip: agent.ip || null,
           wazuh_cluster_name: agent.manager || null,
           wazuh_cluster_node: agent.node_name || null,
@@ -141,7 +142,7 @@ async function syncAssets() {
 
         const assetData = {
           organisation_id: orgId,
-          asset_tag: `WZH-${agent.id}`,
+          asset_tag: `CYB-${agent.id}`,
           asset_name: agent.name || `Agent ${agent.id}`,
           wazuh_agent_id: agent.id,
           wazuh_agent_name: agent.name,
@@ -166,6 +167,8 @@ async function syncAssets() {
           updated++;
           console.log(`  ✓ Updated`);
         } else {
+          // RBI-aligned classification - applied on CREATE only.
+          Object.assign(assetData, classifyAsset(assetData));
           const newAsset = new AssetRegister(assetData);
           await newAsset.save();
           created++;

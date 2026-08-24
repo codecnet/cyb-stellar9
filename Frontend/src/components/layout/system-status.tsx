@@ -7,7 +7,6 @@ interface SystemStatusItem {
 
 const statusItems: SystemStatusItem[] = [
   { name: 'Security Manager', status: 'Online' },
-  { name: 'AI Engine', status: 'Active' },
   { name: 'Elasticsearch', status: 'Healthy' }
 ];
 

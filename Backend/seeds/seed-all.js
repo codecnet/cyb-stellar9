@@ -344,7 +344,7 @@ const SEED_CONFIG = {
       resource: "compliance-details",
       action: "access",
       category: "compliance",
-      description: "Access detailed compliance information in external CodecNet dashboard",
+      description: "Access detailed compliance information in external Stellar9 dashboard",
     },
 
     // Reporting
@@ -510,7 +510,7 @@ const SEED_CONFIG = {
       resource: "assets",
       action: "manage",
       category: "asset_management",
-      description: "Manage and sync assets from CodecNet Manager",
+      description: "Manage and sync assets from Stellar9 Manager",
     },
   ],
 

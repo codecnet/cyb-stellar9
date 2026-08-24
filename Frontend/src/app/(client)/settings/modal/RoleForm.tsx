@@ -2,6 +2,8 @@ import React, { useState, useEffect, FormEvent } from 'react';
 import Cookies from 'js-cookie';
 import { Role, Permission } from '../types';
 
+const BASE_URL = process.env.NEXT_PUBLIC_RBAC_BASE_IP || 'http://localhost:5000/api';
+
 // --- Helper Types ---
 interface GroupedPermissions {
     [resource: string]: Permission[];
@@ -46,7 +48,7 @@ const RoleForm: React.FC<RoleFormProps> = ({ initialData, onClose, onRoleUpdate 
             }
 
             try {
-                const response = await fetch('http://localhost:5000/api/permissions/all', {
+                const response = await fetch(`${BASE_URL}/permissions/all`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
@@ -153,8 +155,8 @@ const RoleForm: React.FC<RoleFormProps> = ({ initialData, onClose, onRoleUpdate 
         };
 
         const url = isEditing
-            ? `http://localhost:5000/api/roles/update/${initialData?._id}`
-            : 'http://localhost:5000/api/roles/create';
+            ? `${BASE_URL}/roles/update/${initialData?._id}`
+            : `${BASE_URL}/roles/create`;
         const method = isEditing ? 'PUT' : 'POST';
 
         try {

@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import Cookies from 'js-cookie'
 import { getUserFromCookies } from '@/lib/auth'
-import { organisationsApi } from '@/lib/api'
+import { organisationsApi, usersApi } from '@/lib/api'
 
 interface Client {
   id: string
@@ -108,8 +108,11 @@ export function ClientProvider({ children }: { children: React.ReactNode }) {
         console.log('🔵 organisation_id:', user.organisation_id)
         console.log('🔵 user_type:', user.user_type)
 
-        // Set isClientMode based on whether they can also view overview
-        setIsClientMode(hasOverviewPermission || false)
+        // A user pinned to a single organisation is never in client-selection mode,
+        // regardless of overview permission. Leaving this true traps them on the
+        // minimal "Client Overview" sidebar, because selectedClient can never be
+        // populated without the organisation:read permission.
+        setIsClientMode(false)
 
         console.log('🚀 Calling fetchClientOrganization with:', orgId)
         fetchClientOrganization(orgId)
@@ -152,6 +155,30 @@ export function ClientProvider({ children }: { children: React.ReactNode }) {
   }, [authToken]) // Re-run when auth token changes (for initial login)
 
   // Function to fetch client's organization details
+  // Fallback for users pinned to a single organisation (e.g. the Client role) who
+  // lack the organisation:read permission that GET /organisations/:id requires.
+  // GET /users/me is open to any authenticated user and returns only the caller's
+  // own organisation id/name - no Wazuh credentials.
+  const setClientFromCurrentUser = async (orgId: string): Promise<boolean> => {
+    try {
+      const me: any = await usersApi.getMe()
+      const org = me?.data?.organisation
+      if (org) {
+        setSelectedClient({
+          id: org.id || orgId,
+          name: org.client_name || org.name || 'Current Client',
+          status: 'active',
+        })
+        console.log('[FALLBACK] Organisation loaded from /users/me')
+        return true
+      }
+      console.warn('[FALLBACK] /users/me returned no organisation')
+    } catch (e) {
+      console.error('[FALLBACK] /users/me failed:', e)
+    }
+    return false
+  }
+
   const fetchClientOrganization = async (orgId: string) => {
     try {
       console.log(`🚀 [FETCH START] Fetching organization details for client user: ${orgId}`)
@@ -184,9 +211,8 @@ export function ClientProvider({ children }: { children: React.ReactNode }) {
         setSelectedClient(userClient)
         console.log(`✅ [SUCCESS] Client organization loaded: ${userClient.name}`)
       } else {
-        console.warn('⚠️ [API ERROR] API response not successful or no data')
-        console.log('⚠️ [API ERROR] Full response structure:', JSON.stringify(response, null, 2))
-        console.log('ℹ️ [INFO] No client set - user should select from overview page')
+        console.warn('[API] Org endpoint returned no data - falling back to /users/me')
+        await setClientFromCurrentUser(orgId)
       }
     } catch (error) {
       console.error('❌ [ERROR] Failed to fetch client organization:', error)
@@ -195,7 +221,8 @@ export function ClientProvider({ children }: { children: React.ReactNode }) {
         stack: (error as Error).stack,
         name: (error as Error).name
       })
-      console.log('ℹ️ [INFO] No client set - user should select from overview page')
+      console.log('[API] Org endpoint failed - falling back to /users/me')
+      await setClientFromCurrentUser(orgId)
     } finally {
       setIsLoading(false)
       console.log('🏁 [FETCH END] fetchClientOrganization completed')
